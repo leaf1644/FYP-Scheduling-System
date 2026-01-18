@@ -1,0 +1,5 @@
+{
+  "name": "FYP 排程系統 (FYP Scheduler)",
+  "description": "An intelligent scheduling engine using CSP algorithms to assign FYP presentations based on constraints like room availability and professor schedules.",
+  "requestFramePermissions": []
+}
