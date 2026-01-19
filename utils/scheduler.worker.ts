@@ -91,7 +91,13 @@ function forwardCheck(
     const neighborDomain = ctx.students[neighborIdx];
     let hasViableOption = false;
 
-    for (const option of neighborDomain.validRoomSlots) {
+     for (const option of neighborDomain.validRoomSlots) {
+      // FIXED: Check against candidate (current attempt)
+      if (option.roomId === candidate.roomId && 
+          option.slotId === candidate.slotId) {
+        continue; // This option conflicts with candidate, skip it
+      }
+
       let isValid = true;
       
       // Check room conflict
@@ -111,12 +117,11 @@ function forwardCheck(
       for (const assignment of ctx.assignments) {
         if (assignment === null) continue;
         const otherStudent = ctx.students[assignment.studentIndex].student;
-        
         if (assignment.roomSlot.slotId === option.slotId) {
-          if (neighborDomain.student.supervisorId === otherStudent.supervisorId ||
-              neighborDomain.student.supervisorId === otherStudent.observerId ||
-              neighborDomain.student.observerId === otherStudent.supervisorId ||
-              neighborDomain.student.observerId === otherStudent.observerId) {
+          if (otherStudent.supervisorId === neighborDomain.student.supervisorId ||
+              otherStudent.observerId === neighborDomain.student.supervisorId ||
+              otherStudent.supervisorId === neighborDomain.student.observerId ||
+              otherStudent.observerId === neighborDomain.student.observerId) {
             profConflict = true;
             break;
           }
