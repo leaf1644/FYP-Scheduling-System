@@ -340,7 +340,7 @@ function optimizeSchedule(ctx: SchedulerContext, unscheduledIndices: number[]) {
   return remaining;
 }
 
-// ...existing code...
+
 
 // --- Main Worker Handler ---
 

@@ -108,11 +108,14 @@ const App: React.FC = () => {
   };
 
   const handleAskAi = async () => {
-    if (!scheduleData || !process.env.API_KEY) return;
+    if (!scheduleData || !process.env.API_KEY) {
+      setErrorMessage("缺少 Google GenAI API Key，請設定環境變數");
+      return;
+    }
     setIsAskingAi(true);
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const ai = new GoogleGenAI(process.env.API_KEY);
       
       const failedSummary = scheduleData.unscheduled.slice(0, 15).map(u => 
         `{ sup: "${u.student.supervisorId}", obs: "${u.student.observerId}", reason: "${u.reason}" }`
@@ -149,9 +152,11 @@ const App: React.FC = () => {
           setAiAdvice({ analysis: text, suggestions: [] });
       }
 
-    } catch (e) {
-      console.error(e);
-      setAiAdvice({ analysis: "AI 連線失敗，請檢查 API Key。", suggestions: [] });
+    } catch (e: any) {
+      console.error("AI request error:", e);
+      const errorMsg = e?.message || "AI 連線失敗，請檢查 API Key 和網路連線。";
+      setAiAdvice({ analysis: errorMsg, suggestions: [] });
+      setErrorMessage(`AI 分析失敗: ${errorMsg}`);
     } finally {
       setIsAskingAi(false);
     }
