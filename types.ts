@@ -48,6 +48,7 @@ export interface ScheduleResult {
   success: boolean;
   assignments: ScheduleAssignment[];
   unscheduled: UnscheduledStudent[];
+  softConstraintCost?: number; // Optional: cost of soft constraint violations (lower is better)
 }
 
 export interface ValidationIssue {

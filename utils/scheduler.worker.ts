@@ -425,11 +425,6 @@ self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
     if (!success) {
       // Phase 2: Greedy
       unscheduledIndices = solveGreedy(ctx, studentIndices);
-      
-      // Phase 3: Iterative Repair (Optimization) - enabled with soft constraints
-      if (unscheduledIndices.length > 0 && Object.keys(ctx.profPreferences).length > 0) {
-        unscheduledIndices = optimizeSchedule(ctx, unscheduledIndices);
-      }
     } else {
       // Even if strict solved all, verify the solution
       const actualUnscheduled: number[] = [];
@@ -439,6 +434,13 @@ self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
         }
       }
       unscheduledIndices = actualUnscheduled;
+    }
+
+    // Phase 3: Iterative Repair (Optimization) - ALWAYS run if preferences exist
+    // This optimizes soft constraints even if all students are already scheduled
+    if (Object.keys(ctx.profPreferences).length > 0) {
+      console.log(`[Solver] Soft constraints detected. Running optimization phase...`);
+      optimizeSchedule(ctx, unscheduledIndices);
     }
 
     // 5. Final Report Construction
@@ -478,10 +480,20 @@ self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
 
     console.log(`Final unscheduled count: ${unscheduledList.length}`);
 
+    // Calculate and report soft constraint cost if preferences exist
+    const softConstraintCost = Object.keys(ctx.profPreferences).length > 0 
+      ? calculateCost(ctx.assignments, ctx.students, ctx.profPreferences)
+      : undefined;
+
+    if (softConstraintCost !== undefined) {
+      console.log(`[Final] Soft constraint cost: ${softConstraintCost}`);
+    }
+
     self.postMessage({
       success: unscheduledList.length === 0,
       assignments,
-      unscheduled: unscheduledList
+      unscheduled: unscheduledList,
+      softConstraintCost
     });
 
   } catch (error: any) {

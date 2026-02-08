@@ -153,6 +153,27 @@ const ScheduleDashboard: React.FC<Props> = ({ schedule, onReset, allRoomSlots, p
   return (
     <div className="space-y-6">
       
+      {/* Soft Constraint Cost Display */}
+      {schedule.softConstraintCost !== undefined && (
+        <div className="bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 rounded-xl p-4 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-full bg-blue-100">
+                <Briefcase className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-blue-900">軟約束優化狀態</p>
+                <p className="text-xs text-blue-700 mt-0.5">教授工作偏好已套用到此排程</p>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="text-lg font-bold text-blue-900">{schedule.softConstraintCost}</p>
+              <p className="text-xs text-blue-600">目標成本 (越低越佳)</p>
+            </div>
+          </div>
+        </div>
+      )}
+      
       {/* Unscheduled / Edit Mode Banner */}
       {(unscheduled.length > 0 || isEditMode) && (
         <div className={`border rounded-xl p-6 shadow-sm transition-colors ${isEditMode ? 'bg-indigo-50 border-indigo-200' : 'bg-red-50 border-red-200'}`}>
