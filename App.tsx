@@ -43,6 +43,27 @@ const App: React.FC = () => {
     setStatus('idle');
     setErrorMessage('');
     setAiAdvice(null);
+    setAvailableProfessors([]); // Reset professors
+    setProfPreferences({}); // Reset preferences
+  };
+
+  // Extract professors from availability file as soon as it's uploaded
+  const handleProfFileSelect = async (file: File | null) => {
+    setProfFile(file);
+    if (file) {
+      try {
+        const profsData = await parseAvailability(file);
+        const profIds = Object.keys(profsData).sort();
+        setAvailableProfessors(profIds);
+        setProfAvailability(profsData);
+      } catch (err) {
+        console.warn("Could not extract professors from file yet:", err);
+        setAvailableProfessors([]);
+      }
+    } else {
+      setAvailableProfessors([]);
+      setProfPreferences({});
+    }
   };
 
   const startProcessing = async () => {
@@ -63,10 +84,6 @@ const App: React.FC = () => {
       const studentsData = await parseStudents(studentFile);
 
       setProfAvailability(profsData);
-      
-      // Extract unique professor IDs from availability
-      const profIds = Object.keys(profsData).sort();
-      setAvailableProfessors(profIds);
 
       // 2. Validate Data (Logic Check)
       setStatus('validating');
@@ -304,7 +321,7 @@ const App: React.FC = () => {
                     description="professorId, availableSlots"
                     requiredHeaders={['professorId', 'availableSlots']}
                     file={profFile}
-                    onFileSelect={setProfFile}
+                    onFileSelect={handleProfFileSelect}
                   />
                 </div>
 
