@@ -30,6 +30,13 @@ export interface ScheduleAssignment {
   roomSlot: RoomSlot;
 }
 
+// Professor Preferences for Soft Constraints
+export interface ProfPreference {
+  type: 'CONCENTRATE' | 'MAX_PER_DAY' | 'SPREAD';
+  target?: number; // e.g., max presentations per day (for MAX_PER_DAY)
+  weight: number; // How important this preference is (1-10 recommended)
+}
+
 // Enhanced Unscheduled Type
 export interface UnscheduledStudent {
   student: Student;

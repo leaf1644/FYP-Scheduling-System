@@ -1,13 +1,14 @@
 // File: fyp-排程系統-(fyp-scheduler)/utils/scheduler.ts
 
-import { Student, RoomSlot, ScheduleResult } from '../types';
+import { Student, RoomSlot, ScheduleResult, ProfPreference } from '../types';
 // 使用 Vite 的 Worker 導入語法
 import SchedulerWorker from './scheduler.worker?worker';
 
 export const generateSchedule = (
   students: Student[],
   allRoomSlots: RoomSlot[],
-  profAvailability: Record<string, Set<string>>
+  profAvailability: Record<string, Set<string>>,
+  profPreferences?: Record<string, ProfPreference>
 ): Promise<ScheduleResult> => {
   
   return new Promise((resolve, reject) => {
@@ -34,11 +35,12 @@ export const generateSchedule = (
       worker.terminate();
     };
 
-    // 3. 發送數據
+    // 3. 發送數據（包括可選的教授偏好）
     worker.postMessage({
       students,
       allRoomSlots,
-      profAvailability: safeAvailability
+      profAvailability: safeAvailability,
+      profPreferences: profPreferences || {}
     });
   });
 };

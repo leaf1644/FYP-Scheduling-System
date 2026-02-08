@@ -4,10 +4,11 @@ import React, { useState } from 'react';
 import { Bot, Play, AlertCircle, Loader2, Sparkles, AlertTriangle } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 import FileUpload from './components/FileUpload';
+import ProfPreferenceInput from './components/ProfPreferenceInput';
 import ScheduleDashboard from './components/ScheduleDashboard';
 import { parseStudents, parseRooms, parseSlots, parseAvailability, validateData } from './utils/csvHelper';
 import { generateSchedule } from './utils/scheduler';
-import { Student, Slot, RoomSlot, ScheduleResult, SolvingStatus, ValidationResult } from './types';
+import { Student, Slot, RoomSlot, ScheduleResult, SolvingStatus, ValidationResult, ProfPreference } from './types';
 
 const App: React.FC = () => {
   const [studentFile, setStudentFile] = useState<File | null>(null);
@@ -23,6 +24,10 @@ const App: React.FC = () => {
   // Stored for Edit Mode calculation
   const [allRoomSlots, setAllRoomSlots] = useState<RoomSlot[]>([]);
   const [profAvailability, setProfAvailability] = useState<Record<string, Set<string>>>({});
+  
+  // Professor Preferences
+  const [profPreferences, setProfPreferences] = useState<Record<string, ProfPreference>>({});
+  const [availableProfessors, setAvailableProfessors] = useState<string[]>([]);
 
   // Gemini AI State
   const [isAskingAi, setIsAskingAi] = useState(false);
@@ -58,6 +63,10 @@ const App: React.FC = () => {
       const studentsData = await parseStudents(studentFile);
 
       setProfAvailability(profsData);
+      
+      // Extract unique professor IDs from availability
+      const profIds = Object.keys(profsData).sort();
+      setAvailableProfessors(profIds);
 
       // 2. Validate Data (Logic Check)
       setStatus('validating');
@@ -90,10 +99,10 @@ const App: React.FC = () => {
       });
       setAllRoomSlots(generatedRoomSlots);
 
-      // 4. Solve (Worker)
+      // 4. Solve (Worker) - Pass profPreferences
       setStatus('solving');
       try {
-        const result = await generateSchedule(studentsData, generatedRoomSlots, profsData);
+        const result = await generateSchedule(studentsData, generatedRoomSlots, profsData, profPreferences);
         setScheduleData(result);
         setStatus(result.success ? 'success' : 'partial');
       } catch (err: any) {
@@ -298,6 +307,15 @@ const App: React.FC = () => {
                     onFileSelect={setProfFile}
                   />
                 </div>
+
+                {availableProfessors.length > 0 && (
+                  <div className="mt-8 pt-6 border-t border-gray-100">
+                    <ProfPreferenceInput 
+                      professorIds={availableProfessors}
+                      onPreferencesChange={setProfPreferences}
+                    />
+                  </div>
+                )}
 
                 <div className="mt-8 pt-6 border-t border-gray-100">
                   <button
