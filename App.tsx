@@ -1,14 +1,19 @@
-// File: fyp-排程系統-(fyp-scheduler)/App.tsx
+﻿// File: fyp-??蝟餌絞-(fyp-scheduler)/App.tsx
 
 import React, { useState } from 'react';
 import { Bot, Play, AlertCircle, Loader2, Sparkles, AlertTriangle } from 'lucide-react';
-import { GoogleGenAI } from "@google/genai";
 import FileUpload from './components/FileUpload';
 import ProfPreferenceInput from './components/ProfPreferenceInput';
 import ScheduleDashboard from './components/ScheduleDashboard';
 import { parseStudents, parseRooms, parseSlots, parseAvailability, validateData } from './utils/csvHelper';
 import { generateSchedule } from './utils/scheduler';
 import { Student, Slot, RoomSlot, ScheduleResult, SolvingStatus, ValidationResult, ProfPreference } from './types';
+
+interface AiAdviceResponse {
+  bottleneck_professors?: string[];
+  analysis: string;
+  suggestions?: string[];
+}
 
 const App: React.FC = () => {
   const [studentFile, setStudentFile] = useState<File | null>(null);
@@ -31,7 +36,7 @@ const App: React.FC = () => {
 
   // Gemini AI State
   const [isAskingAi, setIsAskingAi] = useState(false);
-  const [aiAdvice, setAiAdvice] = useState<any | null>(null);
+  const [aiAdvice, setAiAdvice] = useState<AiAdviceResponse | null>(null);
 
   const handleReset = () => {
     setStudentFile(null);
@@ -68,7 +73,7 @@ const App: React.FC = () => {
 
   const startProcessing = async () => {
     if (!studentFile || !roomFile || !slotsFile || !profFile) {
-      setErrorMessage("請上傳所有 4 個必要的 CSV 文件");
+      setErrorMessage("隢??單???4 ??閬? CSV ?辣");
       return;
     }
 
@@ -80,7 +85,7 @@ const App: React.FC = () => {
       // 1. Parse Data
       const slotsData = await parseSlots(slotsFile);
       const roomsData = await parseRooms(roomFile);
-      const profsData = await parseAvailability(profFile);
+      const profsData = await parseAvailability(profFile, slotsData);
       const studentsData = await parseStudents(studentFile);
 
       setProfAvailability(profsData);
@@ -92,7 +97,7 @@ const App: React.FC = () => {
 
       if (!valResult.isValid) {
         setStatus('error');
-        setErrorMessage("資料驗證失敗，請修正 CSV 中的錯誤 ID。");
+        setErrorMessage('資料驗證失敗，請檢查 CSV 內容與 ID 對應。');
         return;
       }
 
@@ -119,68 +124,55 @@ const App: React.FC = () => {
       // 4. Solve (Worker) - Pass profPreferences
       setStatus('solving');
       try {
-        const result = await generateSchedule(studentsData, generatedRoomSlots, profsData, profPreferences);
+        const result = await generateSchedule(
+          studentsData,
+          generatedRoomSlots,
+          profsData,
+          profPreferences,
+          { timeoutMs: Math.max(1500, studentsData.length * 120) }
+        );
         setScheduleData(result);
         setStatus(result.success ? 'success' : 'partial');
       } catch (err: any) {
         setStatus('failed');
-        setErrorMessage(err.message || "排程計算失敗");
+        setErrorMessage(err.message || "??閮?憭望?");
       }
 
     } catch (err: any) {
       setStatus('error');
-      setErrorMessage(err.message || "解析文件時發生錯誤。");
+      setErrorMessage(err.message || '檔案解析失敗，請確認 CSV 格式。');
     }
   };
 
   const handleAskAi = async () => {
-    if (!scheduleData || !process.env.API_KEY) {
-      setErrorMessage("缺少 Google GenAI API Key，請設定環境變數");
+    if (!scheduleData) {
       return;
     }
     setIsAskingAi(true);
 
     try {
-      const ai = new GoogleGenAI(process.env.API_KEY);
-      
-      const failedSummary = scheduleData.unscheduled.slice(0, 15).map(u => 
-        `{ sup: "${u.student.supervisorId}", obs: "${u.student.observerId}", reason: "${u.reason}" }`
-      ).join('\n');
+      const failedAssignments = scheduleData.unscheduled.slice(0, 15).map((u) => ({
+        supervisorId: u.student.supervisorId,
+        observerId: u.student.observerId,
+        reason: u.reason
+      }));
 
-      const prompt = `
-        Context: CSP Scheduling for University Presentations.
-        Task: Analyze the following list of failed assignments (anonymized) to find bottleneck resources.
-        
-        Input Data:
-        ${failedSummary}
-        
-        Output format: JSON only.
-        {
-          "bottleneck_professors": ["ProfA", "ProfB"],
-          "analysis": "Brief explanation of why...",
-          "suggestions": [
-            "Ask ProfA to open 1 more slot.",
-            "Swap pairs involving ProfB."
-          ]
-        }
-      `;
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.0-flash',
-        contents: prompt
+      const response = await fetch('/api/ai-advice', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ failedAssignments })
       });
 
-      const text = response.text || "{}";
-      const jsonStr = text.replace(/```json|```/g, '').trim();
-      try {
-          setAiAdvice(JSON.parse(jsonStr));
-      } catch (e) {
-          setAiAdvice({ analysis: text, suggestions: [] });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data?.error || 'AI 分析失敗');
       }
-
+      setAiAdvice(data);
     } catch (e: any) {
-      console.error("AI request error:", e);
-      const errorMsg = e?.message || "AI 連線失敗，請檢查 API Key 和網路連線。";
+      console.error('AI request error:', e);
+      const errorMsg = e?.message || 'AI 分析失敗，請稍後再試';
       setAiAdvice({ analysis: errorMsg, suggestions: [] });
       setErrorMessage(`AI 分析失敗: ${errorMsg}`);
     } finally {
@@ -201,14 +193,14 @@ const App: React.FC = () => {
             </h1>
           </div>
           <div className="flex items-center gap-4">
-             {status === 'partial' && process.env.API_KEY && (
+             {status === 'partial' && (
                <button 
                 onClick={handleAskAi}
                 disabled={isAskingAi || !!aiAdvice}
                 className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-sm rounded-full shadow-sm hover:shadow-md transition-all"
                >
                  {isAskingAi ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                 AI 智能顧問
+                 AI ?箄憿批?
                </button>
              )}
           </div>
@@ -221,7 +213,7 @@ const App: React.FC = () => {
            <div className="mb-6 bg-red-50 border border-red-200 rounded-xl p-6">
               <h3 className="text-lg font-bold text-red-800 flex items-center gap-2 mb-4">
                 <AlertTriangle className="w-5 h-5" />
-                資料驗證錯誤
+                鞈?撽??航炊
               </h3>
               <ul className="list-disc list-inside space-y-1 text-sm text-red-700 max-h-60 overflow-y-auto">
                 {validationResult.issues.map((issue, idx) => (
@@ -237,12 +229,12 @@ const App: React.FC = () => {
               <div className="mb-6 bg-purple-50 border border-purple-200 rounded-xl p-6 relative">
                  <h3 className="text-md font-bold text-purple-900 flex items-center gap-2 mb-2">
                    <Sparkles className="w-4 h-4 text-purple-600" />
-                   AI 建議報告
+                   AI 撱箄降?勗?
                  </h3>
                  
                  {aiAdvice.bottleneck_professors && Array.isArray(aiAdvice.bottleneck_professors) && aiAdvice.bottleneck_professors.length > 0 && (
                      <div className="mb-2 text-sm">
-                        <span className="font-bold text-purple-800">瓶頸教授: </span>
+                        <span className="font-bold text-purple-800">?園??: </span>
                         {aiAdvice.bottleneck_professors.join(', ')}
                      </div>
                  )}
@@ -251,7 +243,7 @@ const App: React.FC = () => {
                    {aiAdvice.analysis}
                  </p>
                  
-                 {/* 修正: 安全檢查 suggestions 是否為陣列 */}
+                 {/* 靽格迤: 摰瑼Ｘ suggestions ?臬?粹??*/}
                  {aiAdvice.suggestions && Array.isArray(aiAdvice.suggestions) && (
                     <ul className="list-disc list-inside text-sm text-purple-800 space-y-1 bg-white/50 p-3 rounded-lg">
                         {aiAdvice.suggestions.map((s: string, i: number) => <li key={i}>{s}</li>)}
@@ -264,7 +256,6 @@ const App: React.FC = () => {
               </div>
             )}
             <ScheduleDashboard 
-                key={Date.now()} // 確保每次計算都強制重置 Dashboard 狀態
                 schedule={scheduleData} 
                 onReset={handleReset} 
                 allRoomSlots={allRoomSlots}
@@ -275,10 +266,10 @@ const App: React.FC = () => {
           <div className="max-w-4xl mx-auto">
             <div className="text-center mb-10">
               <h2 className="text-3xl font-extrabold text-gray-900 mb-4">
-                智慧型 FYP 演示排程系統 v4.1
+                ?箸??FYP 瞍內??蝟餌絞 v4.1
               </h2>
               <p className="text-lg text-gray-600">
-                Web Worker | 局部搜索優化 | 邏輯驗證 | 手動排程
+                Web Worker | 撅?冽?蝝Ｗ??| ?摩撽? | ????
               </p>
             </div>
 
@@ -288,7 +279,7 @@ const App: React.FC = () => {
                   <div className="mb-6 bg-red-50 border-l-4 border-red-500 p-4 rounded-r flex items-start gap-3">
                     <AlertCircle className="w-5 h-5 text-red-600 mt-0.5" />
                     <div>
-                      <h3 className="text-sm font-bold text-red-800">操作中斷</h3>
+                      <h3 className="text-sm font-bold text-red-800">??銝剜</h3>
                       <p className="text-sm text-red-700 mt-1">{errorMessage}</p>
                     </div>
                   </div>
@@ -296,30 +287,28 @@ const App: React.FC = () => {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <FileUpload 
-                    label="1. 學生名單 (Students)" 
-                    description="id, name, supervisorId, observerId"
-                    requiredHeaders={['id', 'name', 'supervisorId', 'observerId']}
+                    label="1. 摮貊?? (Students)" 
+                    description="支援兩種格式：id/name/supervisorId/observerId，或 Students/Supervisor/Observer"
                     file={studentFile}
                     onFileSelect={setStudentFile}
                   />
                   <FileUpload 
-                    label="2. 時段定義 (Slots)" 
+                    label="2. ?挾摰儔 (Slots)" 
                     description="id, timeLabel"
                     requiredHeaders={['id', 'timeLabel']}
                     file={slotsFile}
                     onFileSelect={setSlotsFile}
                   />
                   <FileUpload 
-                    label="3. 房間列表 (Rooms)" 
+                    label="3. ?輸??” (Rooms)" 
                     description="id, name, capacity, availableSlots"
                     requiredHeaders={['id', 'name', 'availableSlots']}
                     file={roomFile}
                     onFileSelect={setRoomFile}
                   />
                   <FileUpload 
-                    label="4. 教授空閒時間 (Availability)" 
-                    description="professorId, availableSlots"
-                    requiredHeaders={['professorId', 'availableSlots']}
+                    label="4. ??蝛粹??? (Availability)" 
+                    description="支援兩種格式：professorId + availableSlots，或 ID + Name + 各時段欄位"
                     file={profFile}
                     onFileSelect={handleProfFileSelect}
                   />
@@ -345,11 +334,11 @@ const App: React.FC = () => {
                         : 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-200 hover:shadow-indigo-300'}
                     `}
                   >
-                    {status === 'parsing' && <><Loader2 className="w-6 h-6 animate-spin" /> 解析資料中...</>}
-                    {status === 'validating' && <><Loader2 className="w-6 h-6 animate-spin" /> 驗證邏輯與完整性...</>}
-                    {status === 'solving' && <><Loader2 className="w-6 h-6 animate-spin" /> 啟動 AI 演算法優化...</>}
+                    {status === 'parsing' && <><Loader2 className="w-6 h-6 animate-spin" /> 閫??鞈?銝?..</>}
+                    {status === 'validating' && <><Loader2 className="w-6 h-6 animate-spin" /> 撽??摩???湔?..</>}
+                    {status === 'solving' && <><Loader2 className="w-6 h-6 animate-spin" /> ?? AI 瞍?瘜??..</>}
                     {(status === 'idle' || status === 'error' || status === 'failed') && (
-                      <><Play className="w-6 h-6 fill-current" /> 開始自動排程</>
+                      <><Play className="w-6 h-6 fill-current" /> ???芸???</>
                     )}
                   </button>
                 </div>
@@ -363,3 +352,5 @@ const App: React.FC = () => {
 };
 
 export default App;
+
+

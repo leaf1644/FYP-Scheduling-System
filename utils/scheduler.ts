@@ -4,11 +4,16 @@ import { Student, RoomSlot, ScheduleResult, ProfPreference } from '../types';
 // 使用 Vite 的 Worker 導入語法
 import SchedulerWorker from './scheduler.worker?worker';
 
+interface GenerateScheduleOptions {
+  timeoutMs?: number;
+}
+
 export const generateSchedule = (
   students: Student[],
   allRoomSlots: RoomSlot[],
   profAvailability: Record<string, Set<string>>,
-  profPreferences?: Record<string, ProfPreference>
+  profPreferences?: Record<string, ProfPreference>,
+  options?: GenerateScheduleOptions
 ): Promise<ScheduleResult> => {
   
   return new Promise((resolve, reject) => {
@@ -40,7 +45,8 @@ export const generateSchedule = (
       students,
       allRoomSlots,
       profAvailability: safeAvailability,
-      profPreferences: profPreferences || {}
+      profPreferences: profPreferences || {},
+      timeoutMs: options?.timeoutMs
     });
   });
 };

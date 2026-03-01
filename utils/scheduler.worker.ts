@@ -14,6 +14,7 @@ interface WorkerMessage {
   allRoomSlots: RoomSlot[];
   profAvailability: Record<string, string[]>;
   profPreferences?: Record<string, ProfPreference>;
+  timeoutMs?: number;
 }
 
 interface Assignment {
@@ -29,6 +30,7 @@ interface SchedulerContext {
   conflictGraph: number[][];
   startTime: number;
   profPreferences: Record<string, ProfPreference>;
+  timeoutMs: number;
 }
 
 interface StudentDomain {
@@ -216,7 +218,7 @@ async function solveStrict(
   depth: number
 ): Promise<boolean> {
   if (depth % 50 === 0) {
-    if (Date.now() - ctx.startTime > 1500) throw new Error("TIMEOUT");
+    if (Date.now() - ctx.startTime > ctx.timeoutMs) throw new Error("TIMEOUT");
   }
 
   if (depth === studentOrder.length) return true;
@@ -368,7 +370,7 @@ function optimizeSchedule(ctx: SchedulerContext, unscheduledIndices: number[]) {
 // --- Main Worker Handler ---
 
 self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
-  const { students, allRoomSlots, profAvailability, profPreferences } = e.data;
+  const { students, allRoomSlots, profAvailability, profPreferences, timeoutMs } = e.data;
 
   try {
     // 1. Data Prep
@@ -408,7 +410,8 @@ self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
       occupiedProfSlots: new Set(),
       conflictGraph,
       startTime: Date.now(),
-      profPreferences: profPreferences || {}
+      profPreferences: profPreferences || {},
+      timeoutMs: Math.max(500, timeoutMs ?? 1500)
     };
 
     // 4. Execution Strategy
