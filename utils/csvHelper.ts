@@ -33,6 +33,102 @@ const isAvailableCell = (value: unknown): boolean => {
   return true;
 };
 
+interface ParsedTimeRange {
+  dayKey: string;
+  startMinutes: number;
+  endMinutes: number;
+}
+
+interface SlotTimeMeta {
+  id: string;
+  range: ParsedTimeRange;
+}
+
+const parseClockToMinutes = (raw: string, fallbackMeridiem?: 'am' | 'pm'): number | null => {
+  const cleaned = raw.trim().toLowerCase().replace(/\s+/g, '');
+  const match = cleaned.match(/^(\d{1,2})(?::(\d{2}))?(am|pm)?$/i);
+  if (!match) return null;
+
+  let hour = Number(match[1]);
+  const minute = Number(match[2] || '0');
+  const explicitMeridiem = (match[3]?.toLowerCase() as 'am' | 'pm' | undefined);
+  const meridiem = explicitMeridiem || fallbackMeridiem;
+
+  if (!meridiem) {
+    // No am/pm provided, treat as 24-hour time.
+    if (hour > 23 || minute > 59) return null;
+    return hour * 60 + minute;
+  }
+
+  if (hour < 1 || hour > 12 || minute > 59) return null;
+  if (hour === 12) hour = 0;
+  if (meridiem === 'pm') hour += 12;
+  return hour * 60 + minute;
+};
+
+const parseTimeRange = (label: string): ParsedTimeRange | null => {
+  const normalized = label.replace(/[–—]/g, '-').trim();
+  const match = normalized.match(
+    /^(.*?)(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)\s*-\s*(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)\s*$/i
+  );
+  if (!match) return null;
+
+  const dayKey = normalizeKey(match[1].trim());
+  const startRaw = match[2].trim();
+  const endRaw = match[3].trim();
+
+  const explicitStartMeridiem = startRaw.match(/(am|pm)\s*$/i)?.[1]?.toLowerCase() as 'am' | 'pm' | undefined;
+  const explicitEndMeridiem = endRaw.match(/(am|pm)\s*$/i)?.[1]?.toLowerCase() as 'am' | 'pm' | undefined;
+
+  let startMinutes = parseClockToMinutes(startRaw, explicitStartMeridiem || explicitEndMeridiem);
+  let endMinutes = parseClockToMinutes(endRaw, explicitEndMeridiem || explicitStartMeridiem);
+
+  if (
+    startMinutes !== null &&
+    endMinutes !== null &&
+    startMinutes >= endMinutes &&
+    !explicitStartMeridiem &&
+    explicitEndMeridiem
+  ) {
+    // Case like "11:30-1pm": start should likely be opposite meridiem.
+    const opposite = explicitEndMeridiem === 'am' ? 'pm' : 'am';
+    const altStart = parseClockToMinutes(startRaw, opposite);
+    if (altStart !== null && altStart < endMinutes) {
+      startMinutes = altStart;
+    }
+  }
+
+  if (startMinutes === null || endMinutes === null || startMinutes >= endMinutes) return null;
+
+  return {
+    dayKey,
+    startMinutes,
+    endMinutes,
+  };
+};
+
+const resolveAvailabilityToken = (
+  token: string,
+  slotKeyToId: Record<string, string>,
+  slotTimeMeta: SlotTimeMeta[]
+): string[] => {
+  const normalizedToken = normalizeKey(token);
+  const exactSlotId = slotKeyToId[normalizedToken];
+  if (exactSlotId) return [exactSlotId];
+
+  const range = parseTimeRange(token);
+  if (!range) return [token];
+
+  const matched = slotTimeMeta
+    .filter(({ range: slotRange }) => {
+      if (range.dayKey && slotRange.dayKey && range.dayKey !== slotRange.dayKey) return false;
+      return slotRange.startMinutes >= range.startMinutes && slotRange.endMinutes <= range.endMinutes;
+    })
+    .map(({ id }) => id);
+
+  return matched.length > 0 ? matched : [token];
+};
+
 export const parseStudents = async (file: File): Promise<Student[]> => {
   const data = await parseTabularFile(file);
   return data
@@ -73,6 +169,23 @@ export const parseAvailability = async (
 ): Promise<Record<string, Set<string>>> => {
   const data = await parseTabularFile(file);
   const map: Record<string, Set<string>> = {};
+  const slotKeyToId: Record<string, string> = {};
+  const slotTimeMeta: SlotTimeMeta[] = [];
+
+  (slots || []).forEach((slot) => {
+    slotKeyToId[normalizeKey(slot.id)] = slot.id;
+    slotKeyToId[normalizeKey(slot.timeLabel)] = slot.id;
+
+    const parsed = parseTimeRange(slot.timeLabel) || parseTimeRange(slot.id);
+    if (parsed) {
+      slotTimeMeta.push({ id: slot.id, range: parsed });
+    }
+  });
+
+  const addResolvedSlots = (profId: string, token: string) => {
+    if (!map[profId]) map[profId] = new Set();
+    resolveAvailabilityToken(token, slotKeyToId, slotTimeMeta).forEach((slotId) => map[profId].add(slotId));
+  };
 
   if (data.length === 0) return map;
 
@@ -86,9 +199,7 @@ export const parseAvailability = async (
       const profId = pickValue(row, ['professorId', 'ProfessorId', 'id', 'ID']);
       const slotsStr = pickValue(row, ['availableSlots', 'AvailableSlots']);
       if (!profId) return;
-
-      if (!map[profId]) map[profId] = new Set();
-      splitList(slotsStr).forEach((slotId) => map[profId].add(slotId));
+      splitList(slotsStr).forEach((token) => addResolvedSlots(profId, token));
     });
     return map;
   }
@@ -96,22 +207,13 @@ export const parseAvailability = async (
   const fixedColumns = new Set(['id', 'professorid', 'name', 'professorname']);
   const timeColumns = headers.filter((h) => !fixedColumns.has(normalizeHeader(h)));
 
-  const slotKeyToId: Record<string, string> = {};
-  (slots || []).forEach((slot) => {
-    slotKeyToId[normalizeKey(slot.id)] = slot.id;
-    slotKeyToId[normalizeKey(slot.timeLabel)] = slot.id;
-  });
-
   data.forEach((row) => {
     const profId = pickValue(row, ['professorId', 'ProfessorId', 'id', 'ID']);
     if (!profId) return;
 
-    if (!map[profId]) map[profId] = new Set();
-
     timeColumns.forEach((column) => {
       if (!isAvailableCell(row[column])) return;
-      const mappedSlotId = slotKeyToId[normalizeKey(column)] || column;
-      map[profId].add(mappedSlotId);
+      addResolvedSlots(profId, column);
     });
   });
 
