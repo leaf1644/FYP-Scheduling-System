@@ -1,31 +1,16 @@
-﻿import Papa from 'papaparse';
-import { Student, Slot, Room, ValidationResult, ValidationIssue } from '../types';
-
-type CsvRow = Record<string, unknown>;
-
-const parseCSV = (file: File): Promise<CsvRow[]> => {
-  return new Promise((resolve, reject) => {
-    Papa.parse<CsvRow>(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: (results) => resolve(results.data || []),
-      error: (error) => reject(error),
-    });
-  });
-};
+﻿import { Student, Slot, Room, ValidationResult, ValidationIssue } from '../types';
+import { parseTabularFile, TabularRow } from './tabularParser';
 
 const splitList = (str: string | undefined): string[] => {
   if (!str) return [];
   return str.split(/[,;|]/).map((s) => s.trim()).filter(Boolean);
 };
 
-const normalizeHeader = (value: string): string =>
-  value.toLowerCase().replace(/[\s_]+/g, '').trim();
+const normalizeHeader = (value: string): string => value.toLowerCase().replace(/[\s_]+/g, '').trim();
 
-const normalizeKey = (value: string): string =>
-  value.toLowerCase().replace(/\s+/g, ' ').trim();
+const normalizeKey = (value: string): string => value.toLowerCase().replace(/\s+/g, ' ').trim();
 
-const pickValue = (row: CsvRow, aliases: string[]): string => {
+const pickValue = (row: TabularRow, aliases: string[]): string => {
   for (const alias of aliases) {
     const val = row[alias];
     if (val !== undefined && val !== null) {
@@ -49,7 +34,7 @@ const isAvailableCell = (value: unknown): boolean => {
 };
 
 export const parseStudents = async (file: File): Promise<Student[]> => {
-  const data = await parseCSV(file);
+  const data = await parseTabularFile(file);
   return data
     .map((row, index) => ({
       id: pickValue(row, ['id', 'ID', 'studentId', 'StudentID']) || `S${index + 1}`,
@@ -61,7 +46,7 @@ export const parseStudents = async (file: File): Promise<Student[]> => {
 };
 
 export const parseSlots = async (file: File): Promise<Slot[]> => {
-  const data = await parseCSV(file);
+  const data = await parseTabularFile(file);
   return data
     .map((row) => ({
       id: pickValue(row, ['id', 'ID']),
@@ -71,7 +56,7 @@ export const parseSlots = async (file: File): Promise<Slot[]> => {
 };
 
 export const parseRooms = async (file: File): Promise<Room[]> => {
-  const data = await parseCSV(file);
+  const data = await parseTabularFile(file);
   return data
     .map((row) => ({
       id: pickValue(row, ['id', 'ID']),
@@ -86,7 +71,7 @@ export const parseAvailability = async (
   file: File,
   slots?: Slot[]
 ): Promise<Record<string, Set<string>>> => {
-  const data = await parseCSV(file);
+  const data = await parseTabularFile(file);
   const map: Record<string, Set<string>> = {};
 
   if (data.length === 0) return map;
@@ -146,7 +131,7 @@ export const validateData = (
 
   slots.forEach((s) => {
     if (seenSlotIds.has(s.id)) {
-      issues.push({ type: 'error', message: `Duplicate slot ID: ${s.id}` });
+      issues.push({ type: 'error', message: `時段 ID 重複：${s.id}` });
     }
     seenSlotIds.add(s.id);
   });
@@ -155,19 +140,19 @@ export const validateData = (
     if (!profIds.has(s.supervisorId)) {
       issues.push({
         type: 'error',
-        message: `Student ${s.name} (${s.id}) has unknown supervisorId: ${s.supervisorId}`,
+        message: `學生 ${s.name}（${s.id}）的指導教授不存在：${s.supervisorId}`,
       });
     }
     if (!profIds.has(s.observerId)) {
       issues.push({
         type: 'error',
-        message: `Student ${s.name} (${s.id}) has unknown observerId: ${s.observerId}`,
+        message: `學生 ${s.name}（${s.id}）的口試教授不存在：${s.observerId}`,
       });
     }
     if (s.supervisorId === s.observerId) {
       issues.push({
         type: 'error',
-        message: `Student ${s.name} (${s.id}) has same supervisor and observer: ${s.supervisorId}`,
+        message: `學生 ${s.name}（${s.id}）的指導教授與口試教授不可相同：${s.supervisorId}`,
       });
     }
   });
@@ -177,7 +162,7 @@ export const validateData = (
       if (!slotIds.has(sid)) {
         issues.push({
           type: 'warning',
-          message: `Room ${r.name} references unknown slot ID: ${sid}`,
+          message: `房間 ${r.name} 引用了不存在的時段 ID：${sid}`,
         });
       }
     });
@@ -188,7 +173,7 @@ export const validateData = (
       if (!slotIds.has(sid)) {
         issues.push({
           type: 'warning',
-          message: `Professor ${pid} references unknown slot ID: ${sid}`,
+          message: `教授 ${pid} 引用了不存在的時段 ID：${sid}`,
         });
       }
     });
@@ -205,7 +190,7 @@ export const validateData = (
     if (availableCount < load) {
       issues.push({
         type: 'warning',
-        message: `Professor ${pid} has load ${load} but only ${availableCount} available slots.`,
+        message: `教授 ${pid} 需參與 ${load} 場，但僅有 ${availableCount} 個可用時段。`,
       });
     }
   });

@@ -1,6 +1,6 @@
 ﻿import React, { ChangeEvent, useState } from 'react';
-import Papa from 'papaparse';
 import { Upload, FileCheck, FileX } from 'lucide-react';
+import { getTabularHeaders } from '../utils/tabularParser';
 
 interface FileUploadProps {
   label: string;
@@ -14,46 +14,40 @@ interface FileUploadProps {
 const FileUpload: React.FC<FileUploadProps> = ({
   label,
   description,
-  accept = '.csv',
+  accept = '.csv,.xlsx,.xls',
   file,
   onFileSelect,
-  requiredHeaders
+  requiredHeaders,
 }) => {
   const [headerError, setHeaderError] = useState<string>('');
 
-  const validateHeaders = (selectedFile: File) => {
+  const validateHeaders = async (selectedFile: File) => {
     if (!requiredHeaders || requiredHeaders.length === 0) {
       setHeaderError('');
       onFileSelect(selectedFile);
       return;
     }
 
-    Papa.parse(selectedFile, {
-      header: true,
-      skipEmptyLines: true,
-      preview: 1,
-      complete: (results) => {
-        const headers = (results.meta.fields || []).map((h) => h.trim().toLowerCase());
-        const headerSet = new Set(headers);
-        const missing = requiredHeaders.filter((h) => !headerSet.has(h.toLowerCase()));
+    try {
+      const headers = await getTabularHeaders(selectedFile);
+      const headerSet = new Set(headers.map((h) => h.trim().toLowerCase()));
+      const missing = requiredHeaders.filter((h) => !headerSet.has(h.toLowerCase()));
 
-        if (missing.length > 0) {
-          setHeaderError(`缺少必要欄位: ${missing.join(', ')}`);
-          onFileSelect(null);
-          return;
-        }
-
-        setHeaderError('');
-        onFileSelect(selectedFile);
-      },
-      error: () => {
-        setHeaderError('CSV 解析失敗，請確認檔案格式。');
+      if (missing.length > 0) {
+        setHeaderError(`缺少必要欄位: ${missing.join(', ')}`);
         onFileSelect(null);
-      },
-    });
+        return;
+      }
+
+      setHeaderError('');
+      onFileSelect(selectedFile);
+    } catch {
+      setHeaderError('檔案解析失敗，請確認 CSV/XLSX 格式。');
+      onFileSelect(null);
+    }
   };
 
-  const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
+  const handleChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0] || null;
 
     if (!selectedFile) {
@@ -62,7 +56,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
       return;
     }
 
-    validateHeaders(selectedFile);
+    await validateHeaders(selectedFile);
   };
 
   return (
@@ -84,7 +78,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
         {headerError ? (
           <div className="text-center">
             <FileX className="w-10 h-10 text-red-600 mx-auto mb-2" />
-            <p className="text-sm font-medium text-red-800">CSV 欄位檢查失敗</p>
+            <p className="text-sm font-medium text-red-800">檔案欄位檢查失敗</p>
             <p className="text-xs text-red-600 mt-1">{headerError}</p>
           </div>
         ) : file ? (
@@ -96,7 +90,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
         ) : (
           <div className="text-center pointer-events-none">
             <Upload className="w-10 h-10 text-gray-400 mx-auto mb-2" />
-            <p className="text-sm text-gray-500 font-medium">拖放或點擊上傳 CSV</p>
+            <p className="text-sm text-gray-500 font-medium">拖放或點擊上傳 CSV / XLSX</p>
             <p className="text-xs text-gray-400 mt-1">{description}</p>
             {requiredHeaders && (
               <p className="text-[10px] text-gray-400 mt-2">
