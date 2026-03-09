@@ -1,12 +1,9 @@
 import { Student, RoomSlot, ScheduleResult, ScheduleAssignment } from '../types';
 
-// --- Worker State & Types ---
-
-// Professor Preference Definition
 export interface ProfPreference {
   type: 'CONCENTRATE' | 'MAX_PER_DAY' | 'SPREAD';
-  target?: number; // e.g., max presentations per day
-  weight: number; // How important this preference is
+  target?: number;
+  weight: number;
 }
 
 interface WorkerMessage {
@@ -22,45 +19,51 @@ interface Assignment {
   roomSlot: RoomSlot;
 }
 
-interface SchedulerContext {
-  students: StudentDomain[];
-  assignments: (Assignment | null)[];
-  occupiedRoomSlots: Set<string>;
-  occupiedProfSlots: Set<string>; // "ProfID::SlotID"
-  conflictGraph: number[][];
-  startTime: number;
-  profPreferences: Record<string, ProfPreference>;
-  timeoutMs: number;
-}
-
 interface StudentDomain {
   studentIndex: number;
   student: Student;
   validRoomSlots: RoomSlot[];
 }
 
-// --- Logic Helpers ---
+interface SchedulerContext {
+  students: StudentDomain[];
+  assignments: (Assignment | null)[];
+  conflictGraph: number[][];
+  slotDemand: Record<string, number>;
+  startTime: number;
+  profPreferences: Record<string, ProfPreference>;
+  timeoutMs: number;
+}
+
+interface BeamState {
+  assignments: (Assignment | null)[];
+  scheduledCount: number;
+  unscheduledIndices: number[];
+}
+
+type UnscheduledReason = 'NO_COMMON_TIME' | 'NO_ROOM_AVAILABLE' | 'PROF_BUSY' | 'UNKNOWN';
 
 function getStaticDomain(
   student: Student,
   allRoomSlots: RoomSlot[],
   profAvailability: Record<string, string[]>
 ): RoomSlot[] {
-  const supSlots = profAvailability[student.supervisorId] || [];
-  const obsSlots = profAvailability[student.observerId] || [];
-  
-  // Intersection of Supervisor, Observer, and Slot existence
-  return allRoomSlots.filter(rs => 
-    supSlots.includes(rs.slotId) && obsSlots.includes(rs.slotId)
-  );
+  const supSlots = new Set(profAvailability[student.supervisorId] || []);
+  const obsSlots = new Set(profAvailability[student.observerId] || []);
+  return allRoomSlots.filter((roomSlot) => supSlots.has(roomSlot.slotId) && obsSlots.has(roomSlot.slotId));
 }
 
-// --- Soft Constraint Scoring Engine ---
-
 function getDateFromSlot(slot: RoomSlot): string {
-  // Extract day from format like "Slot 01 (Day 1 9:00)"
-  const match = slot.timeLabel.match(/Day (\d+)/);
-  return match ? `Day ${match[1]}` : slot.timeLabel;
+  const normalized = slot.timeLabel.replace(/[–—]/g, '-').trim();
+  const rangeMatch = normalized.match(
+    /^(.*?)(\d{1,2}(?::\d{2})?\s*(?:am|pm)?\s*-\s*\d{1,2}(?::\d{2})?\s*(?:am|pm)?)$/i
+  );
+  if (rangeMatch?.[1]?.trim()) return rangeMatch[1].trim();
+
+  const dayMatch = normalized.match(/Day\s+\d+/i);
+  if (dayMatch) return dayMatch[0];
+
+  return normalized;
 }
 
 function calculateCost(
@@ -69,437 +72,644 @@ function calculateCost(
   profPreferences: Record<string, ProfPreference>
 ): number {
   let totalCost = 0;
-  
-  // Collect professor statistics
-  const profStats: Record<string, { days: Set<string>, dailyLoad: Record<string, number> }> = {};
+  const profStats: Record<string, { days: Set<string>; dailyLoad: Record<string, number> }> = {};
 
-  assignments.forEach(a => {
-    if (!a) return;
-    const student = students[a.studentIndex].student;
-    const day = getDateFromSlot(a.roomSlot);
+  assignments.forEach((assignment) => {
+    if (!assignment) return;
 
-    [student.supervisorId, student.observerId].forEach(pid => {
-      if (!profStats[pid]) {
-        profStats[pid] = { days: new Set(), dailyLoad: {} };
+    const student = students[assignment.studentIndex].student;
+    const day = getDateFromSlot(assignment.roomSlot);
+
+    [student.supervisorId, student.observerId].forEach((professorId) => {
+      if (!profStats[professorId]) {
+        profStats[professorId] = { days: new Set(), dailyLoad: {} };
       }
-      profStats[pid].days.add(day);
-      profStats[pid].dailyLoad[day] = (profStats[pid].dailyLoad[day] || 0) + 1;
+
+      profStats[professorId].days.add(day);
+      profStats[professorId].dailyLoad[day] = (profStats[professorId].dailyLoad[day] || 0) + 1;
     });
   });
 
-  // Calculate cost based on preferences
-  Object.keys(profStats).forEach(pid => {
-    const stats = profStats[pid];
-    const pref = profPreferences[pid] || { type: 'CONCENTRATE', weight: 10 };
+  Object.entries(profStats).forEach(([professorId, stats]) => {
+    const pref = profPreferences[professorId] || { type: 'CONCENTRATE', weight: 10 };
 
     if (pref.type === 'CONCENTRATE') {
-      // Prefer fewer days (all presentations on one day)
       if (stats.days.size > 1) {
         totalCost += (stats.days.size - 1) * pref.weight;
       }
-    } else if (pref.type === 'MAX_PER_DAY') {
-      // Limit presentations per day (e.g., max 3 per day)
+      return;
+    }
+
+    if (pref.type === 'MAX_PER_DAY') {
       const limit = pref.target || 3;
-      Object.values(stats.dailyLoad).forEach(load => {
-        if (load > limit) {
-          totalCost += (load - limit) * pref.weight;
-        }
+      Object.values(stats.dailyLoad).forEach((load) => {
+        if (load > limit) totalCost += (load - limit) * pref.weight;
       });
-    } else if (pref.type === 'SPREAD') {
-      // Prefer more days (spread presentations)
-      const idealDays = Math.ceil(Object.values(stats.dailyLoad).reduce((a, b) => a + b, 0) / 2);
-      if (stats.days.size < idealDays) {
-        totalCost += (idealDays - stats.days.size) * pref.weight;
-      }
+      return;
+    }
+
+    const totalLoad = Object.values(stats.dailyLoad).reduce((sum, load) => sum + load, 0);
+    const idealDays = Math.ceil(totalLoad / 2);
+    if (stats.days.size < idealDays) {
+      totalCost += (idealDays - stats.days.size) * pref.weight;
     }
   });
 
   return totalCost;
 }
 
-// ... existing code...
-
-function isValidMove(
-  ctx: SchedulerContext,
-  student: Student,
-  candidate: RoomSlot,
-  ignoreStudentIndex: number = -1
-): boolean {
-  // 1. Room Conflict - Check by roomId + slotId
-  for (const assignment of ctx.assignments) {
-    if (assignment !== null && assignment.roomSlot.roomId === candidate.roomId && assignment.roomSlot.slotId === candidate.slotId) {
-      return false;
-    }
-  }
-
-  // 2. Professor Conflict - Check both supervisor AND observer against ALL assignments
-  for (const assignment of ctx.assignments) {
-    if (assignment === null) continue;
-    
-    const otherStudent = ctx.students[assignment.studentIndex].student;
-    const otherSlot = assignment.roomSlot;
-    
-    // Check if this slot already has the same supervisor or observer
-    if (otherSlot.slotId === candidate.slotId) {
-      // Current student's supervisors can't overlap with other student's supervisors/observers
-      if (student.supervisorId === otherStudent.supervisorId) return false;
-      if (student.supervisorId === otherStudent.observerId) return false;
-      if (student.observerId === otherStudent.supervisorId) return false;
-      if (student.observerId === otherStudent.observerId) return false;
-    }
-  }
-
-  return true;
+function hasTimedOut(ctx: SchedulerContext): boolean {
+  return Date.now() - ctx.startTime > ctx.timeoutMs;
 }
 
-function forwardCheck(
+function cloneAssignments(assignments: (Assignment | null)[]): (Assignment | null)[] {
+  return assignments.map((assignment) => (assignment ? { ...assignment } : null));
+}
+
+function getBlockingStudentIndicesForAssignments(
   ctx: SchedulerContext,
-  currentStudentIndex: number,
+  assignments: (Assignment | null)[],
+  studentIndex: number,
+  candidate: RoomSlot
+): number[] {
+  const blockers = new Set<number>();
+  const student = ctx.students[studentIndex].student;
+
+  assignments.forEach((assignment, assignedIndex) => {
+    if (!assignment || assignedIndex === studentIndex) return;
+
+    const otherStudent = ctx.students[assignment.studentIndex].student;
+
+    if (assignment.roomSlot.roomId === candidate.roomId && assignment.roomSlot.slotId === candidate.slotId) {
+      blockers.add(assignedIndex);
+    }
+
+    if (assignment.roomSlot.slotId !== candidate.slotId) return;
+
+    if (
+      student.supervisorId === otherStudent.supervisorId ||
+      student.supervisorId === otherStudent.observerId ||
+      student.observerId === otherStudent.supervisorId ||
+      student.observerId === otherStudent.observerId
+    ) {
+      blockers.add(assignedIndex);
+    }
+  });
+
+  return Array.from(blockers);
+}
+
+function getBlockingStudentIndices(
+  ctx: SchedulerContext,
+  studentIndex: number,
+  candidate: RoomSlot
+): number[] {
+  return getBlockingStudentIndicesForAssignments(ctx, ctx.assignments, studentIndex, candidate);
+}
+
+function isValidMove(ctx: SchedulerContext, studentIndex: number, candidate: RoomSlot): boolean {
+  return getBlockingStudentIndices(ctx, studentIndex, candidate).length === 0;
+}
+
+function isValidMoveForAssignments(
+  ctx: SchedulerContext,
+  assignments: (Assignment | null)[],
+  studentIndex: number,
   candidate: RoomSlot
 ): boolean {
+  return getBlockingStudentIndicesForAssignments(ctx, assignments, studentIndex, candidate).length === 0;
+}
+
+function compareCandidateSlots(
+  ctx: SchedulerContext,
+  assignments: (Assignment | null)[],
+  studentIndex: number,
+  left: RoomSlot,
+  right: RoomSlot,
+  randomize = false
+): number {
+  const leftBlockers = getBlockingStudentIndicesForAssignments(ctx, assignments, studentIndex, left).length;
+  const rightBlockers = getBlockingStudentIndicesForAssignments(ctx, assignments, studentIndex, right).length;
+  if (leftBlockers !== rightBlockers) return leftBlockers - rightBlockers;
+
+  const leftDemand = ctx.slotDemand[left.slotId] || 0;
+  const rightDemand = ctx.slotDemand[right.slotId] || 0;
+  if (leftDemand !== rightDemand) return leftDemand - rightDemand;
+
+  if (randomize) return Math.random() - 0.5;
+  return left.timeLabel.localeCompare(right.timeLabel) || left.roomName.localeCompare(right.roomName);
+}
+
+function forwardCheck(ctx: SchedulerContext, currentStudentIndex: number, candidate: RoomSlot): boolean {
   const neighbors = ctx.conflictGraph[currentStudentIndex];
+  const currentStudent = ctx.students[currentStudentIndex].student;
+
   for (const neighborIdx of neighbors) {
     if (ctx.assignments[neighborIdx] !== null) continue;
 
-    const neighborDomain = ctx.students[neighborIdx];
-    let hasViableOption = false;
+    const neighbor = ctx.students[neighborIdx];
+    const hasViableOption = neighbor.validRoomSlots.some((option) => {
+      if (option.roomId === candidate.roomId && option.slotId === candidate.slotId) return false;
+      if (
+        option.slotId === candidate.slotId &&
+        (
+          neighbor.student.supervisorId === currentStudent.supervisorId ||
+          neighbor.student.supervisorId === currentStudent.observerId ||
+          neighbor.student.observerId === currentStudent.supervisorId ||
+          neighbor.student.observerId === currentStudent.observerId
+        )
+      ) {
+        return false;
+      }
+      return isValidMoveForAssignments(ctx, ctx.assignments, neighborIdx, option);
+    });
 
-     for (const option of neighborDomain.validRoomSlots) {
-      // FIXED: Check against candidate (current attempt)
-      if (option.roomId === candidate.roomId && 
-          option.slotId === candidate.slotId) {
-        continue; // This option conflicts with candidate, skip it
-      }
-
-      let isValid = true;
-      
-      // Check room conflict
-      for (const assignment of ctx.assignments) {
-        if (assignment !== null && 
-            assignment.roomSlot.roomId === option.roomId && 
-            assignment.roomSlot.slotId === option.slotId) {
-          isValid = false;
-          break;
-        }
-      }
-      
-      if (!isValid) continue;
-
-      // Check professor conflicts
-      let profConflict = false;
-      for (const assignment of ctx.assignments) {
-        if (assignment === null) continue;
-        const otherStudent = ctx.students[assignment.studentIndex].student;
-        if (assignment.roomSlot.slotId === option.slotId) {
-          if (otherStudent.supervisorId === neighborDomain.student.supervisorId ||
-              otherStudent.observerId === neighborDomain.student.supervisorId ||
-              otherStudent.supervisorId === neighborDomain.student.observerId ||
-              otherStudent.observerId === neighborDomain.student.observerId) {
-            profConflict = true;
-            break;
-          }
-        }
-      }
-      
-      if (!profConflict) {
-        hasViableOption = true;
-        break;
-      }
-    }
-    
     if (!hasViableOption) return false;
   }
+
   return true;
 }
 
-async function solveStrict(
-  ctx: SchedulerContext,
-  studentOrder: number[],
-  depth: number
-): Promise<boolean> {
-  if (depth % 50 === 0) {
-    if (Date.now() - ctx.startTime > ctx.timeoutMs) throw new Error("TIMEOUT");
+async function solveStrict(ctx: SchedulerContext, studentOrder: number[], depth: number): Promise<boolean> {
+  if (depth % 40 === 0 && hasTimedOut(ctx)) {
+    throw new Error('TIMEOUT');
   }
 
   if (depth === studentOrder.length) return true;
 
   const currentIdx = studentOrder[depth];
-  const domainObj = ctx.students[currentIdx];
+  const domain = ctx.students[currentIdx];
+  const orderedSlots = [...domain.validRoomSlots].sort((left, right) =>
+    compareCandidateSlots(ctx, ctx.assignments, currentIdx, left, right)
+  );
 
-  for (const slot of domainObj.validRoomSlots) {
-    if (!isValidMove(ctx, domainObj.student, slot)) continue;
+  for (const slot of orderedSlots) {
+    if (!isValidMove(ctx, currentIdx, slot)) continue;
     if (!forwardCheck(ctx, currentIdx, slot)) continue;
 
-    // Apply
     ctx.assignments[currentIdx] = { studentIndex: currentIdx, roomSlot: slot };
-
     const success = await solveStrict(ctx, studentOrder, depth + 1);
     if (success) return true;
-
-    // Backtrack
     ctx.assignments[currentIdx] = null;
   }
+
   return false;
 }
 
-function solveGreedy(ctx: SchedulerContext, studentOrder: number[]) {
-  ctx.assignments.fill(null);
-  console.log(`[Greedy] Starting fresh with ${studentOrder.length} students`);
-
+function solveGreedyPass(ctx: SchedulerContext, studentOrder: number[], randomize: boolean): number[] {
+  ctx.assignments = new Array(ctx.students.length).fill(null);
   const unscheduledIndices: number[] = [];
 
   for (const idx of studentOrder) {
-    const domainObj = ctx.students[idx];
-    const student = domainObj.student;
-    
-    // Filter slots that don't conflict with any existing assignment
-    const possibleSlots = domainObj.validRoomSlots.filter(s => {
-      // 1. Check room occupancy
-      for (const assignment of ctx.assignments) {
-        if (assignment !== null && assignment.roomSlot.roomId === s.roomId && assignment.roomSlot.slotId === s.slotId) {
-          return false;
-        }
-      }
-      
-      // 2. Check professor availability in this slot
-      for (const assignment of ctx.assignments) {
-        if (assignment === null) continue;
-        const otherStudent = ctx.students[assignment.studentIndex].student;
-        
-        if (assignment.roomSlot.slotId === s.slotId) {
-          // Check all four professor conflict scenarios
-          if (student.supervisorId === otherStudent.supervisorId) return false;
-          if (student.supervisorId === otherStudent.observerId) return false;
-          if (student.observerId === otherStudent.supervisorId) return false;
-          if (student.observerId === otherStudent.observerId) return false;
-        }
-      }
-      
-      return true;
-    });
+    const domain = ctx.students[idx];
+    const sortedSlots = [...domain.validRoomSlots].sort((left, right) =>
+      compareCandidateSlots(ctx, ctx.assignments, idx, left, right, randomize)
+    );
 
-    if (possibleSlots.length > 0) {
-      const bestSlot = possibleSlots[0];
-      ctx.assignments[idx] = { studentIndex: idx, roomSlot: bestSlot };
-      console.log(`[Greedy] ${student.name} scheduled to ${bestSlot.roomName} ${bestSlot.timeLabel}`);
+    const chosen = sortedSlots.find((slot) => isValidMove(ctx, idx, slot));
+    if (chosen) {
+      ctx.assignments[idx] = { studentIndex: idx, roomSlot: chosen };
     } else {
       unscheduledIndices.push(idx);
-      console.log(`[Greedy] ${student.name} has NO valid slots (domain size was ${domainObj.validRoomSlots.length})`);
     }
   }
-  
-  console.log(`[Greedy] Done. Unscheduled: ${unscheduledIndices.map(i => ctx.students[i].student.name).join(', ')}`);
+
   return unscheduledIndices;
 }
 
-function optimizeSchedule(ctx: SchedulerContext, unscheduledIndices: number[]) {
-  console.log(`[Optimization] Starting with cost-based optimization...`);
-  
+function perturbStudentOrder(ctx: SchedulerContext, baseOrder: number[]): number[] {
+  const shuffled = [...baseOrder];
+
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    if (Math.random() > 0.35) continue;
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+
+  shuffled.sort((left, right) => {
+    const leftDomain = ctx.students[left].validRoomSlots.length;
+    const rightDomain = ctx.students[right].validRoomSlots.length;
+    if (leftDomain !== rightDomain) return leftDomain - rightDomain;
+    return (ctx.conflictGraph[right].length - ctx.conflictGraph[left].length) + (Math.random() - 0.5) * 2;
+  });
+
+  return shuffled;
+}
+
+function scoreBeamState(ctx: SchedulerContext, state: BeamState): number {
+  const scarceSlotPenalty = state.assignments.reduce((sum, assignment) => {
+    if (!assignment) return sum;
+    return sum + (ctx.slotDemand[assignment.roomSlot.slotId] || 0);
+  }, 0);
+
+  return state.scheduledCount * 100000 - state.unscheduledIndices.length * 1000 - scarceSlotPenalty;
+}
+
+function solveBeamSearch(ctx: SchedulerContext, studentOrder: number[]): number[] {
+  const beamWidth = studentOrder.length > 140 ? 18 : 24;
+  const maxCandidatesPerStudent = 5;
+  let beam: BeamState[] = [{
+    assignments: new Array(ctx.students.length).fill(null),
+    scheduledCount: 0,
+    unscheduledIndices: [],
+  }];
+
+  let processed = 0;
+  for (; processed < studentOrder.length; processed++) {
+    if (hasTimedOut(ctx)) break;
+
+    const studentIndex = studentOrder[processed];
+    const nextBeam: BeamState[] = [];
+
+    beam.forEach((state) => {
+      const candidates = [...ctx.students[studentIndex].validRoomSlots]
+        .filter((slot) => isValidMoveForAssignments(ctx, state.assignments, studentIndex, slot))
+        .sort((left, right) => compareCandidateSlots(ctx, state.assignments, studentIndex, left, right))
+        .slice(0, maxCandidatesPerStudent);
+
+      candidates.forEach((slot) => {
+        const assignments = cloneAssignments(state.assignments);
+        assignments[studentIndex] = { studentIndex, roomSlot: slot };
+        nextBeam.push({
+          assignments,
+          scheduledCount: state.scheduledCount + 1,
+          unscheduledIndices: [...state.unscheduledIndices],
+        });
+      });
+
+      nextBeam.push({
+        assignments: cloneAssignments(state.assignments),
+        scheduledCount: state.scheduledCount,
+        unscheduledIndices: [...state.unscheduledIndices, studentIndex],
+      });
+    });
+
+    nextBeam.sort((left, right) => scoreBeamState(ctx, right) - scoreBeamState(ctx, left));
+    beam = nextBeam.slice(0, beamWidth);
+  }
+
+  const bestState = [...beam].sort((left, right) => scoreBeamState(ctx, right) - scoreBeamState(ctx, left))[0];
+  ctx.assignments = cloneAssignments(bestState.assignments);
+
+  const unscheduled = [...bestState.unscheduledIndices];
+  for (let i = processed; i < studentOrder.length; i++) {
+    const studentIndex = studentOrder[i];
+    const candidates = [...ctx.students[studentIndex].validRoomSlots].sort((left, right) =>
+      compareCandidateSlots(ctx, ctx.assignments, studentIndex, left, right)
+    );
+    const chosen = candidates.find((slot) => isValidMove(ctx, studentIndex, slot));
+    if (chosen) {
+      ctx.assignments[studentIndex] = { studentIndex, roomSlot: chosen };
+    } else {
+      unscheduled.push(studentIndex);
+    }
+  }
+
+  return unscheduled;
+}
+
+function tryRepairPlacement(
+  ctx: SchedulerContext,
+  studentIndex: number,
+  depthRemaining: number,
+  visitingStudents: Set<number>,
+  reservedSlotIds: Set<string>
+): boolean {
+  if (hasTimedOut(ctx) || depthRemaining < 0 || visitingStudents.has(studentIndex)) return false;
+
+  visitingStudents.add(studentIndex);
+  const currentAssignment = ctx.assignments[studentIndex];
+  const candidates = [...ctx.students[studentIndex].validRoomSlots]
+    .filter((slot) => !reservedSlotIds.has(slot.id))
+    .sort((left, right) => compareCandidateSlots(ctx, ctx.assignments, studentIndex, left, right));
+
+  for (const candidate of candidates) {
+    if (currentAssignment?.roomSlot.id === candidate.id) {
+      visitingStudents.delete(studentIndex);
+      return true;
+    }
+
+    const blockers = getBlockingStudentIndices(ctx, studentIndex, candidate);
+    if (blockers.length > 0 && depthRemaining === 0) continue;
+
+    const snapshot = cloneAssignments(ctx.assignments);
+    ctx.assignments[studentIndex] = null;
+    blockers.forEach((blockerIndex) => {
+      ctx.assignments[blockerIndex] = null;
+    });
+
+    const nextReserved = new Set(reservedSlotIds);
+    nextReserved.add(candidate.id);
+    const orderedBlockers = [...blockers].sort(
+      (left, right) => ctx.students[left].validRoomSlots.length - ctx.students[right].validRoomSlots.length
+    );
+
+    let repaired = true;
+    for (const blockerIndex of orderedBlockers) {
+      if (!tryRepairPlacement(ctx, blockerIndex, depthRemaining - 1, visitingStudents, new Set(nextReserved))) {
+        repaired = false;
+        break;
+      }
+    }
+
+    if (repaired && isValidMove(ctx, studentIndex, candidate)) {
+      ctx.assignments[studentIndex] = { studentIndex, roomSlot: candidate };
+      visitingStudents.delete(studentIndex);
+      return true;
+    }
+
+    ctx.assignments = snapshot;
+  }
+
+  visitingStudents.delete(studentIndex);
+  return false;
+}
+
+function repairSchedule(ctx: SchedulerContext, unscheduledIndices: number[]): number[] {
+  let remaining = [...unscheduledIndices];
+  let madeProgress = true;
+
+  while (madeProgress && remaining.length > 0 && !hasTimedOut(ctx)) {
+    madeProgress = false;
+
+    const orderedUnscheduled = [...remaining].sort((left, right) => {
+      const leftDomain = ctx.students[left].validRoomSlots.length;
+      const rightDomain = ctx.students[right].validRoomSlots.length;
+      if (leftDomain !== rightDomain) return leftDomain - rightDomain;
+      return ctx.conflictGraph[right].length - ctx.conflictGraph[left].length;
+    });
+
+    for (const studentIndex of orderedUnscheduled) {
+      const domainSize = ctx.students[studentIndex].validRoomSlots.length;
+      if (domainSize === 0) continue;
+
+      const depthLimit = domainSize <= 4 ? 4 : domainSize <= 12 ? 3 : 2;
+      const repaired = tryRepairPlacement(ctx, studentIndex, depthLimit, new Set<number>(), new Set<string>());
+      if (!repaired) continue;
+
+      remaining = remaining.filter((idx) => idx !== studentIndex);
+      madeProgress = true;
+    }
+  }
+
+  return remaining;
+}
+
+function isBetterSolution(
+  ctx: SchedulerContext,
+  candidateUnscheduled: number[],
+  bestUnscheduled: number[],
+  candidateAssignments: (Assignment | null)[],
+  bestAssignments: (Assignment | null)[]
+): boolean {
+  if (candidateUnscheduled.length !== bestUnscheduled.length) {
+    return candidateUnscheduled.length < bestUnscheduled.length;
+  }
+
+  if (Object.keys(ctx.profPreferences).length > 0) {
+    const candidateCost = calculateCost(candidateAssignments, ctx.students, ctx.profPreferences);
+    const bestCost = calculateCost(bestAssignments, ctx.students, ctx.profPreferences);
+    if (candidateCost !== bestCost) return candidateCost < bestCost;
+  }
+
+  return false;
+}
+
+function solveMultiStart(ctx: SchedulerContext, baseOrder: number[]): number[] {
+  let bestAssignments = cloneAssignments(ctx.assignments);
+  let bestUnscheduled = solveGreedyPass(ctx, baseOrder, false);
+  bestUnscheduled = repairSchedule(ctx, bestUnscheduled);
+  bestAssignments = cloneAssignments(ctx.assignments);
+
+  let iteration = 0;
+  const maxIterations = 200;
+
+  while (!hasTimedOut(ctx) && iteration < maxIterations && bestUnscheduled.length > 0) {
+    const trialOrder = perturbStudentOrder(ctx, baseOrder);
+    let trialUnscheduled = solveGreedyPass(ctx, trialOrder, true);
+    if (trialUnscheduled.length > 0) {
+      trialUnscheduled = repairSchedule(ctx, trialUnscheduled);
+    }
+
+    if (isBetterSolution(ctx, trialUnscheduled, bestUnscheduled, ctx.assignments, bestAssignments)) {
+      bestAssignments = cloneAssignments(ctx.assignments);
+      bestUnscheduled = [...trialUnscheduled];
+    }
+
+    iteration += 1;
+  }
+
+  ctx.assignments = bestAssignments;
+  return bestUnscheduled;
+}
+
+function optimizeSchedule(ctx: SchedulerContext): void {
   let currentCost = calculateCost(ctx.assignments, ctx.students, ctx.profPreferences);
-  console.log(`[Optimization] Initial cost: ${currentCost}`);
-  
   const maxIterations = 3000;
-  let improvements = 0;
 
   for (let i = 0; i < maxIterations; i++) {
-    // Pick random student and slot
+    if (hasTimedOut(ctx)) return;
+
     const randomIdx = Math.floor(Math.random() * ctx.assignments.length);
-    const currentAssign = ctx.assignments[randomIdx];
-    
-    if (!currentAssign) continue;
+    const currentAssignment = ctx.assignments[randomIdx];
+    if (!currentAssignment) continue;
 
     const domain = ctx.students[randomIdx].validRoomSlots;
     if (domain.length <= 1) continue;
 
     const randomSlot = domain[Math.floor(Math.random() * domain.length)];
-    if (randomSlot.id === currentAssign.roomSlot.id) continue;
+    if (randomSlot.id === currentAssignment.roomSlot.id) continue;
+    if (!isValidMove(ctx, randomIdx, randomSlot)) continue;
 
-    // Check hard constraints (must be valid)
-    let isHardValid = true;
-    
-    // Check room conflict
-    for (const assignment of ctx.assignments) {
-      if (assignment && assignment.studentIndex !== randomIdx &&
-          assignment.roomSlot.roomId === randomSlot.roomId && 
-          assignment.roomSlot.slotId === randomSlot.slotId) {
-        isHardValid = false;
-        break;
-      }
+    ctx.assignments[randomIdx] = { studentIndex: randomIdx, roomSlot: randomSlot };
+    const newCost = calculateCost(ctx.assignments, ctx.students, ctx.profPreferences);
+
+    if (newCost <= currentCost) {
+      currentCost = newCost;
+    } else {
+      ctx.assignments[randomIdx] = currentAssignment;
     }
+  }
+}
 
-    // Check professor conflict
-    if (isHardValid) {
-      const student = ctx.students[randomIdx].student;
-      for (const assignment of ctx.assignments) {
-        if (assignment && assignment.studentIndex !== randomIdx &&
-            assignment.roomSlot.slotId === randomSlot.slotId) {
-          const otherStudent = ctx.students[assignment.studentIndex].student;
-          if (student.supervisorId === otherStudent.supervisorId ||
-              student.supervisorId === otherStudent.observerId ||
-              student.observerId === otherStudent.supervisorId ||
-              student.observerId === otherStudent.observerId) {
-            isHardValid = false;
-            break;
-          }
+function summarizeUnscheduled(
+  ctx: SchedulerContext,
+  studentIndex: number
+): { reason: UnscheduledReason; details: string } {
+  const domain = ctx.students[studentIndex];
+  if (domain.validRoomSlots.length === 0) {
+    return {
+      reason: 'NO_COMMON_TIME',
+      details: '指導教授與口試教授沒有任何共同可用時段。',
+    };
+  }
+
+  const blockerSummary: Record<string, number> = {};
+
+  domain.validRoomSlots.forEach((slot) => {
+    const blockers = getBlockingStudentIndices(ctx, studentIndex, slot);
+    if (blockers.length === 0) return;
+
+    blockers.forEach((blockerIndex) => {
+      const blocker = ctx.students[blockerIndex].student;
+      if (ctx.assignments[blockerIndex]?.roomSlot.roomId === slot.roomId) {
+        const key = `房間 ${slot.roomName} 在 ${slot.timeLabel} 已被 ${blocker.name} 使用`;
+        blockerSummary[key] = (blockerSummary[key] || 0) + 1;
+        return;
+      }
+
+      const student = domain.student;
+      if (
+        student.supervisorId === blocker.supervisorId ||
+        student.supervisorId === blocker.observerId
+      ) {
+        const key = `教授 ${student.supervisorId} 在部分候選時段與其他學生衝堂`;
+        blockerSummary[key] = (blockerSummary[key] || 0) + 1;
+      } else {
+        const key = `教授 ${student.observerId} 在部分候選時段與其他學生衝堂`;
+        blockerSummary[key] = (blockerSummary[key] || 0) + 1;
+      }
+    });
+  });
+
+  const topReason = Object.entries(blockerSummary).sort((left, right) => right[1] - left[1])[0]?.[0];
+  return {
+    reason: 'PROF_BUSY',
+    details: topReason || '可用時段已被其他安排占用，無法找到符合硬限制的位置。',
+  };
+}
+
+self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
+  const { students, allRoomSlots, profAvailability, profPreferences, timeoutMs } = event.data;
+
+  try {
+    const domainObjects: StudentDomain[] = students.map((student, index) => ({
+      studentIndex: index,
+      student,
+      validRoomSlots: getStaticDomain(student, allRoomSlots, profAvailability),
+    }));
+
+    const conflictGraph = Array.from({ length: students.length }, () => [] as number[]);
+    for (let i = 0; i < students.length; i++) {
+      for (let j = i + 1; j < students.length; j++) {
+        const left = students[i];
+        const right = students[j];
+        if (
+          left.supervisorId === right.supervisorId ||
+          left.supervisorId === right.observerId ||
+          left.observerId === right.supervisorId ||
+          left.observerId === right.observerId
+        ) {
+          conflictGraph[i].push(j);
+          conflictGraph[j].push(i);
         }
       }
     }
 
-    if (!isHardValid) continue;
-
-    // Try the move
-    ctx.assignments[randomIdx] = { studentIndex: randomIdx, roomSlot: randomSlot };
-    const newCost = calculateCost(ctx.assignments, ctx.students, ctx.profPreferences);
-
-    if (newCost < currentCost) {
-      currentCost = newCost;
-      improvements++;
-      console.log(`[Optimization] Improvement ${improvements}: cost ${newCost}`);
-    } else {
-      // Revert
-      ctx.assignments[randomIdx] = currentAssign;
-    }
-  }
-
-  console.log(`[Optimization] Done. Made ${improvements} improvements. Final cost: ${currentCost}`);
-  return unscheduledIndices;
-}
-
-
-
-// --- Main Worker Handler ---
-
-self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
-  const { students, allRoomSlots, profAvailability, profPreferences, timeoutMs } = e.data;
-
-  try {
-    // 1. Data Prep
-    const domainObjects: StudentDomain[] = students.map((s, i) => ({
-      studentIndex: i,
-      student: s,
-      validRoomSlots: getStaticDomain(s, allRoomSlots, profAvailability)
-    }));
-
-    // 2. Conflict Graph
-    const conflictGraph = Array.from({ length: students.length }, () => [] as number[]);
-    for (let i = 0; i < students.length; i++) {
-      for (let j = i + 1; j < students.length; j++) {
-         const s1 = students[i];
-         const s2 = students[j];
-         if (s1.supervisorId === s2.supervisorId || s1.supervisorId === s2.observerId ||
-             s1.observerId === s2.supervisorId || s1.observerId === s2.observerId) {
-           conflictGraph[i].push(j);
-           conflictGraph[j].push(i);
-         }
-      }
-    }
-
-    // 3. Sort (MRV + Degree)
-    const studentIndices = domainObjects.map(d => d.studentIndex);
-    studentIndices.sort((a, b) => {
-      const dA = domainObjects[a].validRoomSlots.length;
-      const dB = domainObjects[b].validRoomSlots.length;
-      if (dA !== dB) return dA - dB;
-      return conflictGraph[b].length - conflictGraph[a].length;
+    const studentOrder = domainObjects.map((domain) => domain.studentIndex);
+    studentOrder.sort((left, right) => {
+      const leftDomain = domainObjects[left].validRoomSlots.length;
+      const rightDomain = domainObjects[right].validRoomSlots.length;
+      if (leftDomain !== rightDomain) return leftDomain - rightDomain;
+      return conflictGraph[right].length - conflictGraph[left].length;
     });
 
     const ctx: SchedulerContext = {
       students: domainObjects,
       assignments: new Array(students.length).fill(null),
-      occupiedRoomSlots: new Set(),
-      occupiedProfSlots: new Set(),
       conflictGraph,
+      slotDemand: domainObjects.reduce<Record<string, number>>((acc, domain) => {
+        const uniqueSlotIds = new Set(domain.validRoomSlots.map((roomSlot) => roomSlot.slotId));
+        uniqueSlotIds.forEach((slotId) => {
+          acc[slotId] = (acc[slotId] || 0) + 1;
+        });
+        return acc;
+      }, {}),
       startTime: Date.now(),
       profPreferences: profPreferences || {},
-      timeoutMs: Math.max(500, timeoutMs ?? 1500)
+      timeoutMs: Math.max(500, timeoutMs ?? 1500),
     };
 
-    // 4. Execution Strategy
-    let success = false;
+    const totalBudget = ctx.timeoutMs;
+    const strictBudget = Math.min(4000, Math.max(1000, Math.floor(totalBudget * 0.25)));
+
+    let solvedStrictly = false;
     try {
-      success = await solveStrict(ctx, studentIndices, 0);
-    } catch (err) {
-      success = false; 
+      ctx.startTime = Date.now();
+      ctx.timeoutMs = strictBudget;
+      solvedStrictly = await solveStrict(ctx, studentOrder, 0);
+    } catch {
+      solvedStrictly = false;
     }
 
     let unscheduledIndices: number[] = [];
+    if (!solvedStrictly) {
+      const heuristicBudget = Math.max(1000, totalBudget - strictBudget);
+      const beamBudget = Math.max(600, Math.floor(heuristicBudget * 0.35));
+      const multiStartBudget = Math.max(600, heuristicBudget - beamBudget);
 
-    // ALWAYS try greedy after strict to get unscheduled list for reporting
-    if (!success) {
-      // Phase 2: Greedy
-      unscheduledIndices = solveGreedy(ctx, studentIndices);
+      let bestAssignments = cloneAssignments(ctx.assignments);
+      let bestUnscheduled = [...studentOrder];
+
+      ctx.startTime = Date.now();
+      ctx.timeoutMs = beamBudget;
+      const beamUnscheduled = repairSchedule(ctx, solveBeamSearch(ctx, studentOrder));
+      bestAssignments = cloneAssignments(ctx.assignments);
+      bestUnscheduled = [...beamUnscheduled];
+
+      ctx.startTime = Date.now();
+      ctx.timeoutMs = multiStartBudget;
+      const multiStartUnscheduled = solveMultiStart(ctx, studentOrder);
+      if (isBetterSolution(ctx, multiStartUnscheduled, bestUnscheduled, ctx.assignments, bestAssignments)) {
+        bestAssignments = cloneAssignments(ctx.assignments);
+        bestUnscheduled = [...multiStartUnscheduled];
+      }
+
+      ctx.assignments = bestAssignments;
+      unscheduledIndices = bestUnscheduled;
     } else {
-      // Even if strict solved all, verify the solution
-      const actualUnscheduled: number[] = [];
-      for (let i = 0; i < ctx.assignments.length; i++) {
-        if (ctx.assignments[i] === null) {
-          actualUnscheduled.push(i);
-        }
-      }
-      unscheduledIndices = actualUnscheduled;
+      unscheduledIndices = ctx.assignments
+        .map((assignment, index) => (assignment === null ? index : -1))
+        .filter((index) => index >= 0);
     }
 
-    // Phase 3: Iterative Repair (Optimization) - ALWAYS run if preferences exist
-    // This optimizes soft constraints even if all students are already scheduled
     if (Object.keys(ctx.profPreferences).length > 0) {
-      console.log(`[Solver] Soft constraints detected. Running optimization phase...`);
-      optimizeSchedule(ctx, unscheduledIndices);
+      ctx.startTime = Date.now();
+      ctx.timeoutMs = Math.max(500, Math.floor(totalBudget * 0.2));
+      optimizeSchedule(ctx);
     }
 
-    // 5. Final Report Construction
     const assignments: ScheduleAssignment[] = [];
-    const scheduledIndices: number[] = [];
-    
-    ctx.assignments.forEach((assignment, i) => {
-      if (assignment) {
-        const student = ctx.students[assignment.studentIndex].student;
-        const slot = assignment.roomSlot;
-        assignments.push({ student, roomSlot: slot });
-        scheduledIndices.push(assignment.studentIndex);
-        console.log(`Scheduled: ${student.name} → ${slot.roomName} ${slot.timeLabel} (${student.supervisorId}, ${student.observerId})`);
-      }
+    ctx.assignments.forEach((assignment) => {
+      if (!assignment) return;
+      assignments.push({
+        student: ctx.students[assignment.studentIndex].student,
+        roomSlot: assignment.roomSlot,
+      });
     });
-    
-    console.log(`Total scheduled: ${scheduledIndices.length}/${students.length}`);
-    console.log(`Unscheduled indices: ${unscheduledIndices.map(i => ctx.students[i].student.name).join(', ')}`);
 
-    // Detailed Reason Analysis for Unscheduled
-    const unscheduledList = unscheduledIndices.map(idx => {
-      const d = domainObjects[idx];
-      let reason: 'NO_COMMON_TIME' | 'PROF_BUSY' = 'PROF_BUSY';
-      let details = '資源 (教授或房間) 被佔用，嘗試交換無效。';
-
-      if (d.validRoomSlots.length === 0) {
-        reason = 'NO_COMMON_TIME';
-        details = '導師與觀察員沒有共同空閒時間。';
-      }
-
+    const unscheduled = unscheduledIndices.map((studentIndex) => {
+      const student = ctx.students[studentIndex].student;
+      const reason = summarizeUnscheduled(ctx, studentIndex);
       return {
-        student: d.student,
-        reason,
-        details
+        student,
+        reason: reason.reason,
+        details: reason.details,
       };
     });
 
-    console.log(`Final unscheduled count: ${unscheduledList.length}`);
-
-    // Calculate and report soft constraint cost if preferences exist
-    const softConstraintCost = Object.keys(ctx.profPreferences).length > 0 
-      ? calculateCost(ctx.assignments, ctx.students, ctx.profPreferences)
-      : undefined;
-
-    if (softConstraintCost !== undefined) {
-      console.log(`[Final] Soft constraint cost: ${softConstraintCost}`);
-    }
-
-    self.postMessage({
-      success: unscheduledList.length === 0,
+    const result: ScheduleResult = {
+      success: unscheduled.length === 0,
       assignments,
-      unscheduled: unscheduledList,
-      softConstraintCost
-    });
+      unscheduled,
+      softConstraintCost:
+        Object.keys(ctx.profPreferences).length > 0
+          ? calculateCost(ctx.assignments, ctx.students, ctx.profPreferences)
+          : undefined,
+    };
 
+    self.postMessage(result);
   } catch (error: any) {
-    self.postMessage({ error: error.message });
+    self.postMessage({ error: error?.message || 'Unknown worker error' });
   }
 };

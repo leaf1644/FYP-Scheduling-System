@@ -12,6 +12,23 @@ interface Props {
   profAvailability: Record<string, Set<string>>;
 }
 
+const fallbackReasonDetails: Record<string, string> = {
+  NO_COMMON_TIME: '指導教授與口試教授沒有任何共同可用時段。',
+  NO_ROOM_AVAILABLE: '已找到教授共同可用時段，但沒有可用房間。',
+  PROF_BUSY: '可用時段已被其他安排占用，或教授在同時段有衝堂。',
+  UNKNOWN: '系統無法判定更精確的未排入原因。',
+};
+
+const looksCorrupted = (text: string): boolean => /[�]/.test(text) || /\?[^\s]{1,3}/.test(text);
+
+const getReadableUnscheduledDetails = (reason: string, details: string): string => {
+  const normalized = String(details || '').trim();
+  if (!normalized || looksCorrupted(normalized)) {
+    return fallbackReasonDetails[reason] || fallbackReasonDetails.UNKNOWN;
+  }
+  return normalized;
+};
+
 const ScheduleDashboard: React.FC<Props> = ({ schedule, onReset, allRoomSlots, profAvailability }) => {
   const [viewMode, setViewMode] = useState<'time' | 'room' | 'prof'>('time');
   const [assignments, setAssignments] = useState(schedule.assignments);
@@ -420,7 +437,7 @@ const ScheduleDashboard: React.FC<Props> = ({ schedule, onReset, allRoomSlots, p
                       </span>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600">
-                      <div className="max-w-xs">{item.details}</div>
+                      <div className="max-w-xs">{getReadableUnscheduledDetails(item.reason, item.details)}</div>
                     </td>
                     <td className="px-6 py-4">
                       <span className="inline-block bg-orange-100 text-orange-800 text-xs font-semibold px-2 py-1 rounded">

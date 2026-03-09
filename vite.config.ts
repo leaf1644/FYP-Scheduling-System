@@ -1,4 +1,5 @@
-﻿import path from 'path';
+import path from 'path';
+import { spawn } from 'node:child_process';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
@@ -11,6 +12,14 @@ interface FailedAssignment {
 
 interface AdviceRequestBody {
   failedAssignments?: FailedAssignment[];
+}
+
+interface CpSatRequestBody {
+  students?: unknown[];
+  allRoomSlots?: unknown[];
+  profAvailability?: Record<string, string[]>;
+  profPreferences?: Record<string, unknown>;
+  timeoutMs?: number;
 }
 
 const readRequestBody = (req: IncomingMessage): Promise<string> => {
@@ -29,12 +38,15 @@ const sendJson = (res: ServerResponse, statusCode: number, payload: unknown) => 
 };
 
 const buildPrompt = (failedAssignments: FailedAssignment[]) => {
-  const failedSummary = failedAssignments.slice(0, 15).map((item) => {
-    const sup = item.supervisorId || 'N/A';
-    const obs = item.observerId || 'N/A';
-    const reason = item.reason || 'UNKNOWN';
-    return `{ sup: "${sup}", obs: "${obs}", reason: "${reason}" }`;
-  }).join('\n');
+  const failedSummary = failedAssignments
+    .slice(0, 15)
+    .map((item) => {
+      const sup = item.supervisorId || 'N/A';
+      const obs = item.observerId || 'N/A';
+      const reason = item.reason || 'UNKNOWN';
+      return `{ sup: "${sup}", obs: "${obs}", reason: "${reason}" }`;
+    })
+    .join('\n');
 
   return `
 Context: CSP Scheduling for University Presentations.
@@ -60,6 +72,7 @@ const extractGeminiText = (payload: any): string => {
   if (!Array.isArray(parts)) {
     return '';
   }
+
   return parts
     .map((part: any) => (typeof part?.text === 'string' ? part.text : ''))
     .filter(Boolean)
@@ -72,13 +85,13 @@ const parseAdvice = (text: string) => {
     return JSON.parse(cleaned);
   } catch {
     return {
-      analysis: cleaned || 'AI 回傳格式不符合 JSON',
-      suggestions: []
+      analysis: cleaned || 'AI 回傳內容不是有效的 JSON。',
+      suggestions: [],
     };
   }
 };
 
-const createAiAdviceMiddleware = (apiKey?: string) => {
+const createAiAdviceMiddleware = (apiKey?: string, model?: string) => {
   return async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
     if (req.method !== 'POST') {
       sendJson(res, 405, { error: 'Method Not Allowed' });
@@ -90,6 +103,11 @@ const createAiAdviceMiddleware = (apiKey?: string) => {
       return;
     }
 
+    if (!model) {
+      sendJson(res, 500, { error: 'Server 缺少 GEMINI_MODEL 設定' });
+      return;
+    }
+
     try {
       const rawBody = await readRequestBody(req);
       const body = (rawBody ? JSON.parse(rawBody) : {}) as AdviceRequestBody;
@@ -97,19 +115,19 @@ const createAiAdviceMiddleware = (apiKey?: string) => {
 
       const prompt = buildPrompt(failedAssignments);
       const geminiResponse = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`,
         {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
           },
           body: JSON.stringify({
             contents: [
               {
-                parts: [{ text: prompt }]
-              }
-            ]
-          })
+                parts: [{ text: prompt }],
+              },
+            ],
+          }),
         }
       );
 
@@ -123,14 +141,73 @@ const createAiAdviceMiddleware = (apiKey?: string) => {
       const responseText = extractGeminiText(geminiPayload);
       sendJson(res, 200, parseAdvice(responseText));
     } catch (error: any) {
-      sendJson(res, 500, { error: error?.message || 'AI 服務發生未預期錯誤' });
+      sendJson(res, 500, { error: error?.message || 'AI 分析請求失敗' });
+    }
+  };
+};
+
+const runPythonCpSatSolver = (pythonBin: string, scriptPath: string, payload: CpSatRequestBody): Promise<unknown> => {
+  return new Promise((resolve, reject) => {
+    const child = spawn(pythonBin, [scriptPath], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      windowsHide: true,
+    });
+
+    let stdout = '';
+    let stderr = '';
+
+    child.stdout.on('data', (chunk) => {
+      stdout += chunk.toString();
+    });
+
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk.toString();
+    });
+
+    child.on('error', reject);
+    child.on('close', (code) => {
+      const trimmedStdout = stdout.trim();
+      if (code !== 0) {
+        reject(new Error(trimmedStdout || stderr.trim() || `CP-SAT solver exited with code ${code}`));
+        return;
+      }
+
+      try {
+        resolve(trimmedStdout ? JSON.parse(trimmedStdout) : {});
+      } catch {
+        reject(new Error(trimmedStdout || 'CP-SAT solver returned invalid JSON'));
+      }
+    });
+
+    child.stdin.write(JSON.stringify(payload));
+    child.stdin.end();
+  });
+};
+
+const createCpSatMiddleware = (pythonBin: string, scriptPath: string) => {
+  return async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
+    if (req.method !== 'POST') {
+      sendJson(res, 405, { error: 'Method Not Allowed' });
+      return;
+    }
+
+    try {
+      const rawBody = await readRequestBody(req);
+      const body = (rawBody ? JSON.parse(rawBody) : {}) as CpSatRequestBody;
+      const result = await runPythonCpSatSolver(pythonBin, scriptPath, body);
+      sendJson(res, 200, result);
+    } catch (error: any) {
+      sendJson(res, 500, { error: error?.message || 'CP-SAT 求解失敗' });
     }
   };
 };
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
-  const aiAdviceMiddleware = createAiAdviceMiddleware(env.GEMINI_API_KEY);
+  const aiAdviceMiddleware = createAiAdviceMiddleware(env.GEMINI_API_KEY, env.GEMINI_MODEL);
+  const pythonBin = env.PYTHON_BIN || 'python';
+  const cpSatScriptPath = path.resolve(__dirname, 'server', 'cp_sat_solver.py');
+  const cpSatMiddleware = createCpSatMiddleware(pythonBin, cpSatScriptPath);
 
   return {
     server: {
@@ -140,19 +217,21 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       {
-        name: 'ai-advice-middleware',
+        name: 'api-middleware',
         configureServer(server) {
           server.middlewares.use('/api/ai-advice', aiAdviceMiddleware);
+          server.middlewares.use('/api/solve-cp-sat', cpSatMiddleware);
         },
         configurePreviewServer(server) {
           server.middlewares.use('/api/ai-advice', aiAdviceMiddleware);
-        }
-      }
+          server.middlewares.use('/api/solve-cp-sat', cpSatMiddleware);
+        },
+      },
     ],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
-      }
-    }
+      },
+    },
   };
 });

@@ -1,52 +1,91 @@
-// File: fyp-排程系統-(fyp-scheduler)/utils/scheduler.ts
-
 import { Student, RoomSlot, ScheduleResult, ProfPreference } from '../types';
-// 使用 Vite 的 Worker 導入語法
 import SchedulerWorker from './scheduler.worker?worker';
+
+export type SolverMode = 'cp-sat' | 'legacy';
 
 interface GenerateScheduleOptions {
   timeoutMs?: number;
+  solverMode?: SolverMode;
 }
 
-export const generateSchedule = (
+interface SolverPayload {
+  students: Student[];
+  allRoomSlots: RoomSlot[];
+  profAvailability: Record<string, string[]>;
+  profPreferences: Record<string, ProfPreference>;
+  timeoutMs?: number;
+}
+
+const toSafeAvailability = (profAvailability: Record<string, Set<string>>): Record<string, string[]> => {
+  const safeAvailability: Record<string, string[]> = {};
+  Object.entries(profAvailability).forEach(([professorId, slots]) => {
+    safeAvailability[professorId] = Array.from(slots);
+  });
+  return safeAvailability;
+};
+
+const runLegacySolver = (payload: SolverPayload): Promise<ScheduleResult> => {
+  return new Promise((resolve, reject) => {
+    const worker = new SchedulerWorker();
+
+    worker.onmessage = (event) => {
+      if (event.data.error) {
+        reject(new Error(event.data.error));
+      } else {
+        resolve(event.data);
+      }
+      worker.terminate();
+    };
+
+    worker.onerror = (event) => {
+      reject(new Error('Worker Error: ' + (event.message || 'Unknown')));
+      worker.terminate();
+    };
+
+    worker.postMessage(payload);
+  });
+};
+
+const runCpSatSolver = async (payload: SolverPayload): Promise<ScheduleResult> => {
+  const response = await fetch('/api/solve-cp-sat', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data?.error || 'CP-SAT 求解失敗');
+  }
+
+  return data as ScheduleResult;
+};
+
+export const generateSchedule = async (
   students: Student[],
   allRoomSlots: RoomSlot[],
   profAvailability: Record<string, Set<string>>,
   profPreferences?: Record<string, ProfPreference>,
   options?: GenerateScheduleOptions
 ): Promise<ScheduleResult> => {
-  
-  return new Promise((resolve, reject) => {
-    // 1. 轉換 Set 為 Array 以便安全傳輸 (雖然現代瀏覽器支援 Set，但為了相容性建議轉)
-    const safeAvailability: Record<string, string[]> = {};
-    Object.entries(profAvailability).forEach(([k, v]) => {
-      safeAvailability[k] = Array.from(v);
-    });
+  const payload: SolverPayload = {
+    students,
+    allRoomSlots,
+    profAvailability: toSafeAvailability(profAvailability),
+    profPreferences: profPreferences || {},
+    timeoutMs: options?.timeoutMs,
+  };
 
-    // 2. 實例化 Worker (這會加載 scheduler.worker.ts)
-    const worker = new SchedulerWorker();
+  if (options?.solverMode === 'legacy') {
+    return runLegacySolver(payload);
+  }
 
-    worker.onmessage = (e) => {
-      if (e.data.error) {
-        reject(new Error(e.data.error));
-      } else {
-        resolve(e.data);
-      }
-      worker.terminate(); // 完成後關閉 Worker 釋放資源
-    };
-
-    worker.onerror = (e) => {
-      reject(new Error("Worker Error: " + (e.message || "Unknown")));
-      worker.terminate();
-    };
-
-    // 3. 發送數據（包括可選的教授偏好）
-    worker.postMessage({
-      students,
-      allRoomSlots,
-      profAvailability: safeAvailability,
-      profPreferences: profPreferences || {},
-      timeoutMs: options?.timeoutMs
-    });
-  });
+  try {
+    return await runCpSatSolver(payload);
+  } catch (error) {
+    console.warn('CP-SAT solver unavailable, falling back to legacy worker.', error);
+    return runLegacySolver(payload);
+  }
 };

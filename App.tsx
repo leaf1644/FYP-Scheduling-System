@@ -5,8 +5,8 @@ import { Bot, Play, AlertCircle, Loader2, Sparkles, AlertTriangle } from 'lucide
 import FileUpload from './components/FileUpload';
 import ProfPreferenceInput from './components/ProfPreferenceInput';
 import ScheduleDashboard from './components/ScheduleDashboard';
-import { parseStudents, parseRooms, parseSlots, parseAvailability, validateData } from './utils/csvHelper';
-import { generateSchedule } from './utils/scheduler';
+import { deriveSlots, parseStudents, parseRooms, parseAvailability, validateData } from './utils/csvHelper';
+import { generateSchedule, type SolverMode } from './utils/scheduler';
 import { Slot, RoomSlot, ScheduleResult, SolvingStatus, ValidationResult, ProfPreference } from './types';
 
 interface AiAdviceResponse {
@@ -25,6 +25,7 @@ const App: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
   const [scheduleData, setScheduleData] = useState<ScheduleResult | null>(null);
+  const [solverMode, setSolverMode] = useState<SolverMode>('cp-sat');
 
   // Stored for Edit Mode calculation
   const [allRoomSlots, setAllRoomSlots] = useState<RoomSlot[]>([]);
@@ -68,12 +69,13 @@ const App: React.FC = () => {
     } else {
       setAvailableProfessors([]);
       setProfPreferences({});
+      setProfAvailability({});
     }
   };
 
   const startProcessing = async () => {
-    if (!studentFile || !roomFile || !slotsFile || !profFile) {
-      setErrorMessage('請上傳 4 個必要的 CSV 檔案。');
+    if (!studentFile || !roomFile || !profFile) {
+      setErrorMessage('請至少上傳學生、房間與教授可用時間 3 份檔案。');
       return;
     }
 
@@ -83,8 +85,16 @@ const App: React.FC = () => {
 
     try {
       // 1. Parse Data
-      const slotsData = await parseSlots(slotsFile);
-      const roomsData = await parseRooms(roomFile);
+      const slotsData = await deriveSlots({
+        slotsFile,
+        roomFile,
+        availabilityFile: profFile,
+      });
+      if (slotsData.length === 0) {
+        throw new Error('找不到任何可用時段。請上傳時段檔，或使用包含日期與時段欄位的房間/教授檔案。');
+      }
+
+      const roomsData = await parseRooms(roomFile, slotsData);
       const profsData = await parseAvailability(profFile, slotsData);
       const studentsData = await parseStudents(studentFile);
 
@@ -131,7 +141,10 @@ const App: React.FC = () => {
           generatedRoomSlots,
           profsData,
           profPreferences,
-          { timeoutMs: Math.max(1500, studentsData.length * 120) }
+          {
+            timeoutMs: Math.max(1500, studentsData.length * 120),
+            solverMode,
+          }
         );
         setScheduleData(result);
         setStatus(result.success ? 'success' : 'partial');
@@ -293,16 +306,15 @@ const App: React.FC = () => {
                     onFileSelect={setStudentFile}
                   />
                   <FileUpload
-                    label="2. 時段資料 (Slots)"
-                    description="id, timeLabel"
+                    label="2. 時段資料 (Slots，可選)"
+                    description="可省略；系統會嘗試從房間檔或教授檔自動抽取時段"
                     requiredHeaders={['id', 'timeLabel']}
                     file={slotsFile}
                     onFileSelect={setSlotsFile}
                   />
                   <FileUpload
                     label="3. 房間資料 (Rooms)"
-                    description="id, name, capacity, availableSlots"
-                    requiredHeaders={['id', 'name', 'availableSlots']}
+                    description="支援兩種格式：id/name/availableSlots，或 Date + Time Slot + Venue"
                     file={roomFile}
                     onFileSelect={setRoomFile}
                   />
@@ -321,6 +333,20 @@ const App: React.FC = () => {
                 )}
 
                 <div className="mt-8 pt-6 border-t border-gray-100">
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">求解器</label>
+                    <select
+                      value={solverMode}
+                      onChange={(e) => setSolverMode(e.target.value as SolverMode)}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700"
+                    >
+                      <option value="cp-sat">CP-SAT（推薦）</option>
+                      <option value="legacy">Legacy Worker</option>
+                    </select>
+                    <p className="mt-2 text-xs text-gray-500">
+                      `CP-SAT` 會呼叫本地 Python `ortools` API；`Legacy Worker` 則使用原本的前端 heuristic solver。
+                    </p>
+                  </div>
                   <button
                     onClick={startProcessing}
                     disabled={status === 'parsing' || status === 'solving' || status === 'validating'}

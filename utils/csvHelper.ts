@@ -1,4 +1,4 @@
-﻿import { Student, Slot, Room, ValidationResult, ValidationIssue } from '../types';
+import { Student, Slot, Room, ValidationResult, ValidationIssue } from '../types';
 import { parseTabularFile, TabularRow } from './tabularParser';
 
 const splitList = (str: string | undefined): string[] => {
@@ -9,6 +9,35 @@ const splitList = (str: string | undefined): string[] => {
 const normalizeHeader = (value: string): string => value.toLowerCase().replace(/[\s_]+/g, '').trim();
 
 const normalizeKey = (value: string): string => value.toLowerCase().replace(/\s+/g, ' ').trim();
+
+const monthMap: Record<string, number> = {
+  jan: 1,
+  january: 1,
+  feb: 2,
+  february: 2,
+  mar: 3,
+  march: 3,
+  apr: 4,
+  april: 4,
+  may: 5,
+  jun: 6,
+  june: 6,
+  jul: 7,
+  july: 7,
+  aug: 8,
+  august: 8,
+  sep: 9,
+  sept: 9,
+  september: 9,
+  oct: 10,
+  october: 10,
+  nov: 11,
+  november: 11,
+  dec: 12,
+  december: 12,
+};
+
+const autoSlotId = (index: number): string => `AUTO_SLOT_${String(index + 1).padStart(3, '0')}`;
 
 const pickValue = (row: TabularRow, aliases: string[]): string => {
   for (const alias of aliases) {
@@ -25,7 +54,7 @@ const isAvailableCell = (value: unknown): boolean => {
   const normalized = String(value ?? '').trim().toLowerCase();
   if (!normalized) return false;
 
-  const falseValues = new Set(['0', 'n', 'no', 'false', 'f', 'x', '-', 'na', 'n/a']);
+  const falseValues = new Set(['0', 'n', 'no', 'false', 'f', 'x', '-', 'na', 'n/a', 'none', 'nil', 'unavailable']);
   const trueValues = new Set(['1', 'y', 'yes', 'true', 't', 'v', 'available', 'ok', 'a']);
 
   if (falseValues.has(normalized)) return false;
@@ -33,32 +62,29 @@ const isAvailableCell = (value: unknown): boolean => {
   return true;
 };
 
-const buildProfessorAliases = (profIdRaw: string, profNameRaw: string): string[] => {
-  const aliases = new Set<string>();
+const normalizeProfessorId = (profIdRaw: string): string => {
   const profId = profIdRaw.trim();
-  const profName = profNameRaw.trim();
+  if (!profId) return '';
 
-  if (profId) aliases.add(profId);
-  if (profName) aliases.add(profName);
-
-  if (profName) {
-    const stripped = profName.replace(/^prof\.?\s*/i, '').trim();
-    if (stripped) {
-      aliases.add(stripped);
-      aliases.add(`Prof. ${stripped}`);
-      aliases.add(`Prof ${stripped}`);
-    }
-  }
-
-  if (/^\d+$/.test(profId)) {
-    const n = Number(profId);
+  const compact = profId.replace(/\s+/g, '').toUpperCase();
+  const prefixedMatch = compact.match(/^([A-Z]+)0*(\d+)$/);
+  if (prefixedMatch) {
+    const [, prefix, numericPart] = prefixedMatch;
+    const n = Number(numericPart);
     if (!Number.isNaN(n)) {
-      aliases.add(`P${String(n).padStart(2, '0')}`);
-      aliases.add(`P${n}`);
+      return `${prefix}${String(n).padStart(2, '0')}`;
     }
   }
 
-  return Array.from(aliases).filter(Boolean);
+  const numericOnlyMatch = compact.match(/^0*(\d+)$/);
+  if (numericOnlyMatch) {
+    const n = Number(numericOnlyMatch[1]);
+    if (!Number.isNaN(n)) {
+      return `P${String(n).padStart(2, '0')}`;
+    }
+  }
+
+  return compact;
 };
 
 interface ParsedTimeRange {
@@ -72,6 +98,27 @@ interface SlotTimeMeta {
   range: ParsedTimeRange;
 }
 
+const getMonthDayKey = (raw: string): string | null => {
+  const cleaned = raw
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/,/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!cleaned) return null;
+
+  const monthToken = cleaned.split(' ').find((token) => monthMap[token] !== undefined);
+  const dayMatch = cleaned.match(/\b(\d{1,2})\b/);
+
+  if (!monthToken || !dayMatch) return null;
+
+  const month = monthMap[monthToken];
+  const day = Number(dayMatch[1]);
+  if (!month || day < 1 || day > 31) return null;
+
+  return `${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+};
+
 const parseClockToMinutes = (raw: string, fallbackMeridiem?: 'am' | 'pm'): number | null => {
   const cleaned = raw.trim().toLowerCase().replace(/\s+/g, '');
   const match = cleaned.match(/^(\d{1,2})(?::(\d{2}))?(am|pm)?$/i);
@@ -83,7 +130,6 @@ const parseClockToMinutes = (raw: string, fallbackMeridiem?: 'am' | 'pm'): numbe
   const meridiem = explicitMeridiem || fallbackMeridiem;
 
   if (!meridiem) {
-    // No am/pm provided, treat as 24-hour time.
     if (hour > 23 || minute > 59) return null;
     return hour * 60 + minute;
   }
@@ -101,7 +147,8 @@ const parseTimeRange = (label: string): ParsedTimeRange | null => {
   );
   if (!match) return null;
 
-  const dayKey = normalizeKey(match[1].trim());
+  const dayPrefix = match[1].trim();
+  const dayKey = getMonthDayKey(dayPrefix) || normalizeKey(dayPrefix);
   const startRaw = match[2].trim();
   const endRaw = match[3].trim();
 
@@ -118,7 +165,6 @@ const parseTimeRange = (label: string): ParsedTimeRange | null => {
     !explicitStartMeridiem &&
     explicitEndMeridiem
   ) {
-    // Case like "11:30-1pm": start should likely be opposite meridiem.
     const opposite = explicitEndMeridiem === 'am' ? 'pm' : 'am';
     const altStart = parseClockToMinutes(startRaw, opposite);
     if (altStart !== null && altStart < endMinutes) {
@@ -133,6 +179,23 @@ const parseTimeRange = (label: string): ParsedTimeRange | null => {
     startMinutes,
     endMinutes,
   };
+};
+
+const buildSlotResolvers = (slots: Slot[]) => {
+  const slotKeyToId: Record<string, string> = {};
+  const slotTimeMeta: SlotTimeMeta[] = [];
+
+  slots.forEach((slot) => {
+    slotKeyToId[normalizeKey(slot.id)] = slot.id;
+    slotKeyToId[normalizeKey(slot.timeLabel)] = slot.id;
+
+    const parsed = parseTimeRange(slot.timeLabel) || parseTimeRange(slot.id);
+    if (parsed) {
+      slotTimeMeta.push({ id: slot.id, range: parsed });
+    }
+  });
+
+  return { slotKeyToId, slotTimeMeta };
 };
 
 const resolveAvailabilityToken = (
@@ -157,14 +220,93 @@ const resolveAvailabilityToken = (
   return matched.length > 0 ? matched : [token];
 };
 
+const compareSlotLabels = (left: string, right: string): number => {
+  const leftRange = parseTimeRange(left);
+  const rightRange = parseTimeRange(right);
+
+  if (leftRange && rightRange) {
+    if (leftRange.dayKey !== rightRange.dayKey) return leftRange.dayKey.localeCompare(rightRange.dayKey);
+    if (leftRange.startMinutes !== rightRange.startMinutes) return leftRange.startMinutes - rightRange.startMinutes;
+    return leftRange.endMinutes - rightRange.endMinutes;
+  }
+
+  return left.localeCompare(right);
+};
+
+const buildAutoSlots = (labels: string[]): Slot[] => {
+  return Array.from(new Set(labels.map((label) => label.trim()).filter(Boolean)))
+    .sort(compareSlotLabels)
+    .map((timeLabel, index) => ({
+      id: autoSlotId(index),
+      timeLabel,
+    }));
+};
+
+const getRoomScheduleLabel = (row: TabularRow): string => {
+  const dateLabel = pickValue(row, ['date', 'Date']);
+  const timeLabel = pickValue(row, ['timeSlot', 'Time Slot', 'time', 'Time']);
+  return [dateLabel, timeLabel].filter(Boolean).join(' ').trim();
+};
+
+const extractRoomScheduleLabels = (data: TabularRow[]): string[] => data.map(getRoomScheduleLabel).filter(Boolean);
+
+const extractAvailabilityHeaderLabels = (data: TabularRow[]): string[] => {
+  if (data.length === 0) return [];
+
+  const firstRow = data[0] || {};
+  const fixedColumns = new Set(['id', 'professorid', 'name', 'professorname', 'remarks', 'remark', 'note', 'notes']);
+
+  return Object.keys(firstRow).filter((header) => {
+    const normalized = normalizeHeader(header);
+    if (fixedColumns.has(normalized)) return false;
+    return parseTimeRange(header) !== null;
+  });
+};
+
+const isRoomScheduleFormat = (headers: string[]): boolean => {
+  const normalizedHeaders = new Set(headers.map((header) => normalizeHeader(header)));
+  return normalizedHeaders.has('date') &&
+    (normalizedHeaders.has('timeslot') || normalizedHeaders.has('time')) &&
+    (normalizedHeaders.has('venue') || normalizedHeaders.has('room') || normalizedHeaders.has('name'));
+};
+
+export const deriveSlots = async ({
+  slotsFile,
+  roomFile,
+  availabilityFile,
+}: {
+  slotsFile?: File | null;
+  roomFile?: File | null;
+  availabilityFile?: File | null;
+}): Promise<Slot[]> => {
+  if (slotsFile) {
+    const explicitSlots = await parseSlots(slotsFile);
+    if (explicitSlots.length > 0) return explicitSlots;
+  }
+
+  if (roomFile) {
+    const roomData = await parseTabularFile(roomFile);
+    const roomLabels = extractRoomScheduleLabels(roomData);
+    if (roomLabels.length > 0) return buildAutoSlots(roomLabels);
+  }
+
+  if (availabilityFile) {
+    const availabilityData = await parseTabularFile(availabilityFile);
+    const availabilityLabels = extractAvailabilityHeaderLabels(availabilityData);
+    if (availabilityLabels.length > 0) return buildAutoSlots(availabilityLabels);
+  }
+
+  return [];
+};
+
 export const parseStudents = async (file: File): Promise<Student[]> => {
   const data = await parseTabularFile(file);
   return data
     .map((row, index) => ({
       id: pickValue(row, ['id', 'ID', 'studentId', 'StudentID']) || `S${index + 1}`,
       name: pickValue(row, ['name', 'Name', 'student', 'Student', 'students', 'Students']),
-      supervisorId: pickValue(row, ['supervisorId', 'SupervisorId', 'supervisor', 'Supervisor']),
-      observerId: pickValue(row, ['observerId', 'ObserverId', 'observer', 'Observer']),
+      supervisorId: normalizeProfessorId(pickValue(row, ['supervisorId', 'SupervisorId', 'supervisor', 'Supervisor'])),
+      observerId: normalizeProfessorId(pickValue(row, ['observerId', 'ObserverId', 'observer', 'Observer'])),
     }))
     .filter((s) => s.name);
 };
@@ -179,16 +321,60 @@ export const parseSlots = async (file: File): Promise<Slot[]> => {
     .filter((s) => s.id && s.timeLabel);
 };
 
-export const parseRooms = async (file: File): Promise<Room[]> => {
+export const parseRooms = async (file: File, slots?: Slot[]): Promise<Room[]> => {
   const data = await parseTabularFile(file);
-  return data
-    .map((row) => ({
-      id: pickValue(row, ['id', 'ID']),
-      name: pickValue(row, ['name', 'Name']),
-      capacity: parseInt(pickValue(row, ['capacity', 'Capacity']) || '1', 10),
-      availableSlotIds: splitList(pickValue(row, ['availableSlots', 'AvailableSlots'])),
-    }))
-    .filter((r) => r.id && r.name);
+  if (data.length === 0) return [];
+
+  const headers = Object.keys(data[0] || {});
+  const headerSet = new Set(headers.map((header) => normalizeHeader(header)));
+
+  if (headerSet.has('availableslots')) {
+    return data
+      .map((row) => ({
+        id: pickValue(row, ['id', 'ID']),
+        name: pickValue(row, ['name', 'Name']),
+        capacity: parseInt(pickValue(row, ['capacity', 'Capacity']) || '1', 10),
+        availableSlotIds: splitList(pickValue(row, ['availableSlots', 'AvailableSlots'])),
+      }))
+      .filter((r) => r.id && r.name);
+  }
+
+  if (!isRoomScheduleFormat(headers)) return [];
+
+  const effectiveSlots = slots && slots.length > 0 ? slots : buildAutoSlots(extractRoomScheduleLabels(data));
+  const { slotKeyToId, slotTimeMeta } = buildSlotResolvers(effectiveSlots);
+  const rooms = new Map<string, Room>();
+
+  data.forEach((row) => {
+    const roomName = pickValue(row, ['venue', 'Venue', 'room', 'Room', 'name', 'Name']).trim();
+    const slotLabel = getRoomScheduleLabel(row);
+    const hasExistingAssignment = Boolean(
+      pickValue(row, ['student', 'Student']) ||
+      pickValue(row, ['supervisor', 'Supervisor']) ||
+      pickValue(row, ['observer', 'Observer'])
+    );
+
+    if (!roomName || !slotLabel || hasExistingAssignment) return;
+
+    const resolvedSlotIds = resolveAvailabilityToken(slotLabel, slotKeyToId, slotTimeMeta);
+    if (!rooms.has(roomName)) {
+      rooms.set(roomName, {
+        id: roomName,
+        name: roomName,
+        capacity: 1,
+        availableSlotIds: [],
+      });
+    }
+
+    const room = rooms.get(roomName)!;
+    resolvedSlotIds.forEach((slotId) => {
+      if (!room.availableSlotIds.includes(slotId)) {
+        room.availableSlotIds.push(slotId);
+      }
+    });
+  });
+
+  return Array.from(rooms.values()).filter((room) => room.availableSlotIds.length > 0);
 };
 
 export const parseAvailability = async (
@@ -197,25 +383,13 @@ export const parseAvailability = async (
 ): Promise<Record<string, Set<string>>> => {
   const data = await parseTabularFile(file);
   const map: Record<string, Set<string>> = {};
-  const slotKeyToId: Record<string, string> = {};
-  const slotTimeMeta: SlotTimeMeta[] = [];
+  const { slotKeyToId, slotTimeMeta } = buildSlotResolvers(slots || []);
 
-  (slots || []).forEach((slot) => {
-    slotKeyToId[normalizeKey(slot.id)] = slot.id;
-    slotKeyToId[normalizeKey(slot.timeLabel)] = slot.id;
-
-    const parsed = parseTimeRange(slot.timeLabel) || parseTimeRange(slot.id);
-    if (parsed) {
-      slotTimeMeta.push({ id: slot.id, range: parsed });
-    }
-  });
-
-  const addResolvedSlots = (profAliases: string[], token: string) => {
+  const addResolvedSlots = (profId: string, token: string) => {
+    if (!profId) return;
     const resolvedSlotIds = resolveAvailabilityToken(token, slotKeyToId, slotTimeMeta);
-    profAliases.forEach((alias) => {
-      if (!map[alias]) map[alias] = new Set();
-      resolvedSlotIds.forEach((slotId) => map[alias].add(slotId));
-    });
+    if (!map[profId]) map[profId] = new Set();
+    resolvedSlotIds.forEach((slotId) => map[profId].add(slotId));
   };
 
   if (data.length === 0) return map;
@@ -227,28 +401,28 @@ export const parseAvailability = async (
 
   if (isCompactFormat) {
     data.forEach((row) => {
-      const profId = pickValue(row, ['professorId', 'ProfessorId', 'id', 'ID']);
-      const profName = pickValue(row, ['name', 'Name', 'professorName', 'ProfessorName']);
+      const profId = normalizeProfessorId(pickValue(row, ['professorId', 'ProfessorId', 'id', 'ID']));
       const slotsStr = pickValue(row, ['availableSlots', 'AvailableSlots']);
-      const aliases = buildProfessorAliases(profId, profName);
-      if (aliases.length === 0) return;
-      splitList(slotsStr).forEach((token) => addResolvedSlots(aliases, token));
+      if (!profId) return;
+      splitList(slotsStr).forEach((token) => addResolvedSlots(profId, token));
     });
     return map;
   }
 
-  const fixedColumns = new Set(['id', 'professorid', 'name', 'professorname']);
-  const timeColumns = headers.filter((h) => !fixedColumns.has(normalizeHeader(h)));
+  const fixedColumns = new Set(['id', 'professorid', 'name', 'professorname', 'remarks', 'remark', 'note', 'notes']);
+  const timeColumns = headers.filter((header) => {
+    const normalized = normalizeHeader(header);
+    if (fixedColumns.has(normalized)) return false;
+    return parseTimeRange(header) !== null || Boolean(slotKeyToId[normalizeKey(header)]);
+  });
 
   data.forEach((row) => {
-    const profId = pickValue(row, ['professorId', 'ProfessorId', 'id', 'ID']);
-    const profName = pickValue(row, ['name', 'Name', 'professorName', 'ProfessorName']);
-    const aliases = buildProfessorAliases(profId, profName);
-    if (aliases.length === 0) return;
+    const profId = normalizeProfessorId(pickValue(row, ['professorId', 'ProfessorId', 'id', 'ID']));
+    if (!profId) return;
 
     timeColumns.forEach((column) => {
       if (!isAvailableCell(row[column])) return;
-      addResolvedSlots(aliases, column);
+      addResolvedSlots(profId, column);
     });
   });
 
