@@ -33,6 +33,34 @@ const isAvailableCell = (value: unknown): boolean => {
   return true;
 };
 
+const buildProfessorAliases = (profIdRaw: string, profNameRaw: string): string[] => {
+  const aliases = new Set<string>();
+  const profId = profIdRaw.trim();
+  const profName = profNameRaw.trim();
+
+  if (profId) aliases.add(profId);
+  if (profName) aliases.add(profName);
+
+  if (profName) {
+    const stripped = profName.replace(/^prof\.?\s*/i, '').trim();
+    if (stripped) {
+      aliases.add(stripped);
+      aliases.add(`Prof. ${stripped}`);
+      aliases.add(`Prof ${stripped}`);
+    }
+  }
+
+  if (/^\d+$/.test(profId)) {
+    const n = Number(profId);
+    if (!Number.isNaN(n)) {
+      aliases.add(`P${String(n).padStart(2, '0')}`);
+      aliases.add(`P${n}`);
+    }
+  }
+
+  return Array.from(aliases).filter(Boolean);
+};
+
 interface ParsedTimeRange {
   dayKey: string;
   startMinutes: number;
@@ -182,9 +210,12 @@ export const parseAvailability = async (
     }
   });
 
-  const addResolvedSlots = (profId: string, token: string) => {
-    if (!map[profId]) map[profId] = new Set();
-    resolveAvailabilityToken(token, slotKeyToId, slotTimeMeta).forEach((slotId) => map[profId].add(slotId));
+  const addResolvedSlots = (profAliases: string[], token: string) => {
+    const resolvedSlotIds = resolveAvailabilityToken(token, slotKeyToId, slotTimeMeta);
+    profAliases.forEach((alias) => {
+      if (!map[alias]) map[alias] = new Set();
+      resolvedSlotIds.forEach((slotId) => map[alias].add(slotId));
+    });
   };
 
   if (data.length === 0) return map;
@@ -197,9 +228,11 @@ export const parseAvailability = async (
   if (isCompactFormat) {
     data.forEach((row) => {
       const profId = pickValue(row, ['professorId', 'ProfessorId', 'id', 'ID']);
+      const profName = pickValue(row, ['name', 'Name', 'professorName', 'ProfessorName']);
       const slotsStr = pickValue(row, ['availableSlots', 'AvailableSlots']);
-      if (!profId) return;
-      splitList(slotsStr).forEach((token) => addResolvedSlots(profId, token));
+      const aliases = buildProfessorAliases(profId, profName);
+      if (aliases.length === 0) return;
+      splitList(slotsStr).forEach((token) => addResolvedSlots(aliases, token));
     });
     return map;
   }
@@ -209,11 +242,13 @@ export const parseAvailability = async (
 
   data.forEach((row) => {
     const profId = pickValue(row, ['professorId', 'ProfessorId', 'id', 'ID']);
-    if (!profId) return;
+    const profName = pickValue(row, ['name', 'Name', 'professorName', 'ProfessorName']);
+    const aliases = buildProfessorAliases(profId, profName);
+    if (aliases.length === 0) return;
 
     timeColumns.forEach((column) => {
       if (!isAvailableCell(row[column])) return;
-      addResolvedSlots(profId, column);
+      addResolvedSlots(aliases, column);
     });
   });
 
