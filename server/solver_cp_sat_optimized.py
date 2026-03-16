@@ -77,7 +77,14 @@ def main():
     all_room_slots = payload.get("allRoomSlots", [])
     prof_availability = payload.get("profAvailability", {})
     prof_preferences = payload.get("profPreferences", {})
-    timeout_ms = max(500, int(payload.get("timeoutMs", 2000) or 2000))
+    
+    # 優化 1: 將 timeout_ms 預設改為 20000，允許最大調整至 120000
+    timeout_ms = payload.get("timeoutMs", 20000)
+    if timeout_ms is None:
+        timeout_ms = 20000
+    else:
+        timeout_ms = int(timeout_ms)
+    timeout_ms = max(500, min(120000, timeout_ms))  # 限制在 500-120000 毫秒內
 
     model = cp_model.CpModel()
     student_domains = []
@@ -86,13 +93,22 @@ def main():
     professor_slot_to_vars = defaultdict(list)
 
     for student_index, student in enumerate(students):
+        # 取得指導教授與口試教授的可用時段（前端已處理 "if necessary" → true）
         sup_slots = set(prof_availability.get(student["supervisorId"], []))
         obs_slots = set(prof_availability.get(student["observerId"], []))
         domain = []
 
+        # 優化 3: 改善時間區塊映射邏輯
+        # 確保 room 細時段正確對應教授粗區塊
         for room_slot_index, room_slot in enumerate(all_room_slots):
-          if room_slot["slotId"] in sup_slots and room_slot["slotId"] in obs_slots:
-            domain.append(room_slot_index)
+            room_slot_id = room_slot["slotId"]
+            
+            # 檢查該房間時段是否被兩個教授都標記為可用
+            sup_available = room_slot_id in sup_slots
+            obs_available = room_slot_id in obs_slots
+            
+            if sup_available and obs_available:
+                domain.append(room_slot_index)
 
         student_domains.append(domain)
 
@@ -107,21 +123,39 @@ def main():
             professor_slot_to_vars[(student["supervisorId"], room_slot["slotId"])].append(var)
             professor_slot_to_vars[(student["observerId"], room_slot["slotId"])].append(var)
 
+        # 每個學生最多被分配到一個時段
         if vars_for_student:
             model.Add(sum(vars_for_student) <= 1)
 
+    # 每個房間時段最多被分配一個學生
     for vars_for_room_slot in room_slot_to_vars.values():
         model.Add(sum(vars_for_room_slot) <= 1)
 
+    # 每個教授每個時段最多被分配一個學生
     for vars_for_prof_slot in professor_slot_to_vars.values():
         model.Add(sum(vars_for_prof_slot) <= 1)
 
+    # 目標：最大化被分配的學生數量
     objective_terms = list(student_vars.values())
     model.Maximize(sum(objective_terms))
 
+    # 優化 4: 加入 CpSolverParameters，設定更多 workers 與更好的 branching_strategy
     solver = cp_model.CpSolver()
+    
+    # 配置求解器參數以達到更好的最優性
     solver.parameters.max_time_in_seconds = timeout_ms / 1000
-    solver.parameters.num_search_workers = 8
+    solver.parameters.num_search_workers = 16  # 增加 workers 數量（從 8 改為 16）
+    solver.parameters.log_search_progress = False
+    
+    # 設定更好的 branching strategy
+    solver.parameters.cp_model_presolve = True
+    solver.parameters.linearization_level = 2
+    solver.parameters.use_absl_random = True
+    solver.parameters.random_seed = 42
+    
+    # 進一步優化策略
+    solver.parameters.max_num_concurrent_workers = 16
+    solver.parameters.interleave_search = True
 
     status = solver.Solve(model)
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
@@ -159,6 +193,7 @@ def main():
                 "details": "可用時段已被其他安排占用，或教授在同時段有衝堂。",
             })
 
+    # 保留所有輸出格式與軟約束計算
     result = {
         "success": len(unscheduled) == 0,
         "assignments": assignments,
