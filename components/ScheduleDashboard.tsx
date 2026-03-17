@@ -4,6 +4,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { ScheduleResult, RoomSlot, Student } from '../types';
 import { Calendar, Download, AlertTriangle, Briefcase, Edit2, CheckCircle } from 'lucide-react';
 import Papa from 'papaparse';
+import { useI18n } from '../i18n';
 
 interface Props {
   schedule: ScheduleResult;
@@ -12,16 +13,20 @@ interface Props {
   profAvailability: Record<string, Set<string>>;
 }
 
-const fallbackReasonDetails: Record<string, string> = {
-  NO_COMMON_TIME: '指導教授與口試教授沒有任何共同可用時段。',
-  NO_ROOM_AVAILABLE: '已找到教授共同可用時段，但沒有可用房間。',
-  PROF_BUSY: '可用時段已被其他安排占用，或教授在同時段有衝堂。',
-  UNKNOWN: '系統無法判定更精確的未排入原因。',
-};
-
 const looksCorrupted = (text: string): boolean => /[�]/.test(text) || /\?[^\s]{1,3}/.test(text);
 
-const getReadableUnscheduledDetails = (reason: string, details: string): string => {
+const getReadableUnscheduledDetails = (
+  reason: string,
+  details: string,
+  t: (key: string, values?: Record<string, string | number>) => string
+): string => {
+  const fallbackReasonDetails: Record<string, string> = {
+    NO_COMMON_TIME: t('reasons.NO_COMMON_TIME'),
+    NO_ROOM_AVAILABLE: t('reasons.NO_ROOM_AVAILABLE'),
+    PROF_BUSY: t('reasons.PROF_BUSY'),
+    UNKNOWN: t('reasons.UNKNOWN'),
+  };
+
   const normalized = String(details || '').trim();
   if (!normalized || looksCorrupted(normalized)) {
     return fallbackReasonDetails[reason] || fallbackReasonDetails.UNKNOWN;
@@ -34,6 +39,7 @@ const formatProfessorLabel = (id: string, name?: string): string => {
 };
 
 const ScheduleDashboard: React.FC<Props> = ({ schedule, onReset, allRoomSlots, profAvailability }) => {
+  const { t } = useI18n();
   const [viewMode, setViewMode] = useState<'time' | 'room' | 'prof'>('time');
   const [assignments, setAssignments] = useState(schedule.assignments);
   const [unscheduled, setUnscheduled] = useState(schedule.unscheduled);
@@ -147,7 +153,7 @@ const ScheduleDashboard: React.FC<Props> = ({ schedule, onReset, allRoomSlots, p
 
   const handleDownloadCSV = () => {
     const csvData = assignments.map((s) => ({
-      Status: 'Scheduled',
+      Status: t('dashboard.csv.scheduled'),
       Time: s.roomSlot.timeLabel,
       Room: s.roomSlot.roomName,
       Student: s.student.name,
@@ -157,7 +163,7 @@ const ScheduleDashboard: React.FC<Props> = ({ schedule, onReset, allRoomSlots, p
 
     unscheduled.forEach((u) => {
       csvData.push({
-        Status: 'Unscheduled',
+        Status: t('dashboard.csv.unscheduled'),
         Time: '',
         Room: '',
         Student: u.student.name,
@@ -188,13 +194,13 @@ const ScheduleDashboard: React.FC<Props> = ({ schedule, onReset, allRoomSlots, p
                 <Briefcase className="w-5 h-5 text-blue-600" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-blue-900">軟限制成本</p>
-                <p className="text-xs text-blue-700 mt-0.5">數值越低代表越符合教授偏好</p>
+                <p className="text-sm font-semibold text-blue-900">{t('dashboard.softCost')}</p>
+                <p className="text-xs text-blue-700 mt-0.5">{t('dashboard.softCostHint')}</p>
               </div>
             </div>
             <div className="text-right">
               <p className="text-lg font-bold text-blue-900">{schedule.softConstraintCost}</p>
-              <p className="text-xs text-blue-600">評分（越低越好）</p>
+              <p className="text-xs text-blue-600">{t('dashboard.softCostScore')}</p>
             </div>
           </div>
         </div>
@@ -217,15 +223,17 @@ const ScheduleDashboard: React.FC<Props> = ({ schedule, onReset, allRoomSlots, p
               </div>
               <div>
                 <h3 className={`text-lg font-bold ${isEditMode ? 'text-indigo-900' : 'text-red-900'}`}>
-                  {isEditMode ? '手動調整模式' : `${unscheduled.length} 位學生尚未排程`}
+                  {isEditMode ? t('dashboard.manualMode') : t('dashboard.unscheduledCount', { count: unscheduled.length })}
                 </h3>
                 {isEditMode ? (
                   <p className="text-sm text-indigo-700 mt-1">
-                    點選未排程學生後，可在右下角選擇可用時段。
-                    {selectedStudent && <span className="font-bold ml-2">目前選取：{selectedStudent.name}</span>}
+                    {t('dashboard.manualInstruction')}
+                    {selectedStudent && (
+                      <span className="font-bold ml-2">{t('dashboard.manualSelected', { name: selectedStudent.name })}</span>
+                    )}
                   </p>
                 ) : (
-                  <p className="text-sm text-red-700 mt-1">可切換到手動調整模式，將未排程學生安排到可用時段。</p>
+                  <p className="text-sm text-red-700 mt-1">{t('dashboard.manualPrompt')}</p>
                 )}
               </div>
             </div>
@@ -239,7 +247,7 @@ const ScheduleDashboard: React.FC<Props> = ({ schedule, onReset, allRoomSlots, p
                 isEditMode ? 'bg-indigo-600 text-white hover:bg-indigo-700' : 'bg-white border border-gray-300 hover:bg-gray-50'
               }`}
             >
-              {isEditMode ? '完成手動調整' : '進入手動調整'}
+              {isEditMode ? t('dashboard.finishManual') : t('dashboard.enterManual')}
             </button>
           </div>
 
@@ -261,8 +269,8 @@ const ScheduleDashboard: React.FC<Props> = ({ schedule, onReset, allRoomSlots, p
                   <div className="font-bold text-sm truncate">{u.student.name}</div>
                   <div className="text-xs opacity-80">{u.student.id}</div>
                   <div className="text-[10px] flex flex-col gap-1 mt-1">
-                    <span className="bg-white/20 px-1 rounded">S: {formatProfessorLabel(u.student.supervisorId, u.student.supervisorName)}</span>
-                    <span className="bg-white/20 px-1 rounded">O: {formatProfessorLabel(u.student.observerId, u.student.observerName)}</span>
+                    <span className="bg-white/20 px-1 rounded">{t('dashboard.shortSupervisor')}: {formatProfessorLabel(u.student.supervisorId, u.student.supervisorName)}</span>
+                    <span className="bg-white/20 px-1 rounded">{t('dashboard.shortObserver')}: {formatProfessorLabel(u.student.observerId, u.student.observerName)}</span>
                   </div>
                 </div>
               ))}
@@ -276,7 +284,7 @@ const ScheduleDashboard: React.FC<Props> = ({ schedule, onReset, allRoomSlots, p
           <div className="flex items-center gap-2">
             <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
               <Calendar className="w-6 h-6 text-indigo-600" />
-              排程總覽
+              {t('dashboard.title')}
             </h2>
           </div>
 
@@ -288,7 +296,7 @@ const ScheduleDashboard: React.FC<Props> = ({ schedule, onReset, allRoomSlots, p
                   viewMode === 'time' ? 'bg-indigo-100 text-indigo-700' : 'text-gray-600 hover:bg-gray-50'
                 }`}
               >
-                依時段
+                {t('dashboard.view.time')}
               </button>
               <button
                 onClick={() => setViewMode('room')}
@@ -296,7 +304,7 @@ const ScheduleDashboard: React.FC<Props> = ({ schedule, onReset, allRoomSlots, p
                   viewMode === 'room' ? 'bg-indigo-100 text-indigo-700' : 'text-gray-600 hover:bg-gray-50'
                 }`}
               >
-                依房間
+                {t('dashboard.view.room')}
               </button>
               <button
                 onClick={() => setViewMode('prof')}
@@ -304,13 +312,13 @@ const ScheduleDashboard: React.FC<Props> = ({ schedule, onReset, allRoomSlots, p
                   viewMode === 'prof' ? 'bg-indigo-100 text-indigo-700' : 'text-gray-600 hover:bg-gray-50'
                 }`}
               >
-                依教授
+                {t('dashboard.view.prof')}
               </button>
             </div>
             <button
               onClick={handleDownloadCSV}
               className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg border border-gray-300"
-              title="下載 CSV"
+              title={t('actions.downloadCsv')}
             >
               <Download className="w-4 h-4" />
             </button>
@@ -318,7 +326,7 @@ const ScheduleDashboard: React.FC<Props> = ({ schedule, onReset, allRoomSlots, p
               onClick={onReset}
               className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-sm font-medium"
             >
-              重新上傳
+              {t('actions.reupload')}
             </button>
           </div>
         </div>
@@ -360,7 +368,7 @@ const ScheduleDashboard: React.FC<Props> = ({ schedule, onReset, allRoomSlots, p
                                   isSup ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'
                                 }`}
                               >
-                                {isSup ? '指導教授' : '口試教授'}
+                                  {isSup ? t('dashboard.role.supervisor') : t('dashboard.role.observer')}
                               </span>
                             </div>
                           )}
@@ -370,14 +378,14 @@ const ScheduleDashboard: React.FC<Props> = ({ schedule, onReset, allRoomSlots, p
                                 viewMode === 'prof' && item.student.supervisorId === groupKey ? 'font-bold text-orange-700' : ''
                               }
                             >
-                              Sup: {formatProfessorLabel(item.student.supervisorId, item.student.supervisorName)}
+                              {t('dashboard.shortSupervisor')}: {formatProfessorLabel(item.student.supervisorId, item.student.supervisorName)}
                             </div>
                             <div
                               className={
                                 viewMode === 'prof' && item.student.observerId === groupKey ? 'font-bold text-blue-700' : ''
                               }
                             >
-                              Obs: {formatProfessorLabel(item.student.observerId, item.student.observerName)}
+                              {t('dashboard.shortObserver')}: {formatProfessorLabel(item.student.observerId, item.student.observerName)}
                             </div>
                           </div>
                         </div>
@@ -392,14 +400,14 @@ const ScheduleDashboard: React.FC<Props> = ({ schedule, onReset, allRoomSlots, p
           {isEditMode && selectedStudent && (
             <div className="fixed bottom-6 right-6 w-80 bg-white rounded-xl shadow-2xl border border-indigo-200 overflow-hidden flex flex-col max-h-[400px]">
               <div className="bg-indigo-600 text-white px-4 py-3 font-bold flex justify-between items-center">
-                <span>可移動時段</span>
+                <span>{t('dashboard.movableSlots')}</span>
                 <span className="text-xs bg-indigo-500 px-2 py-0.5 rounded">{availableMoves.size}</span>
               </div>
               <div className="overflow-y-auto p-2 space-y-2 flex-1">
                 {availableMoves.size === 0 ? (
                   <div className="text-center text-gray-400 py-8 text-sm">
-                    沒有可用時段。<br />
-                    可考慮調整資料或手動交換其他學生時段。
+                    {t('dashboard.noMoves')}<br />
+                    {t('dashboard.noMovesHint')}
                   </div>
                 ) : (
                   allRoomSlots
@@ -429,19 +437,19 @@ const ScheduleDashboard: React.FC<Props> = ({ schedule, onReset, allRoomSlots, p
           <div className="bg-red-50 px-6 py-4 border-b border-red-200">
             <h3 className="text-lg font-bold text-red-900 flex items-center gap-2">
               <AlertTriangle className="w-6 h-6" />
-              未排入學生（{unscheduled.length}）- 原因清單
+              {t('dashboard.unscheduledTitle', { count: unscheduled.length })}
             </h3>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="bg-red-50 border-b border-red-200">
-                  <th className="px-6 py-3 text-left text-sm font-bold text-red-900">學生</th>
-                  <th className="px-6 py-3 text-left text-sm font-bold text-red-900">ID</th>
-                  <th className="px-6 py-3 text-left text-sm font-bold text-red-900">原因代碼</th>
-                  <th className="px-6 py-3 text-left text-sm font-bold text-red-900">詳細原因</th>
-                  <th className="px-6 py-3 text-left text-sm font-bold text-red-900">指導教授</th>
-                  <th className="px-6 py-3 text-left text-sm font-bold text-red-900">口試教授</th>
+                  <th className="px-6 py-3 text-left text-sm font-bold text-red-900">{t('dashboard.table.student')}</th>
+                  <th className="px-6 py-3 text-left text-sm font-bold text-red-900">{t('dashboard.table.id')}</th>
+                  <th className="px-6 py-3 text-left text-sm font-bold text-red-900">{t('dashboard.table.reasonCode')}</th>
+                  <th className="px-6 py-3 text-left text-sm font-bold text-red-900">{t('dashboard.table.reasonDetails')}</th>
+                  <th className="px-6 py-3 text-left text-sm font-bold text-red-900">{t('dashboard.table.supervisor')}</th>
+                  <th className="px-6 py-3 text-left text-sm font-bold text-red-900">{t('dashboard.table.observer')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -462,7 +470,7 @@ const ScheduleDashboard: React.FC<Props> = ({ schedule, onReset, allRoomSlots, p
                       </span>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600">
-                      <div className="max-w-xs">{getReadableUnscheduledDetails(item.reason, item.details)}</div>
+                      <div className="max-w-xs">{getReadableUnscheduledDetails(item.reason, item.details, t)}</div>
                     </td>
                     <td className="px-6 py-4">
                       <span className="inline-block bg-orange-100 text-orange-800 text-xs font-semibold px-2 py-1 rounded">

@@ -43,48 +43,6 @@ const monthMap: Record<string, number> = {
   december: 12,
 };
 
-const fallbackProfessorNameToId: Record<string, string> = {
-  'Dr. CHAN, Jacky Chun Pong': 'P11',
-  'Dr. CHEUNG, Jamie Y.H.': 'P35',
-  'Dr. CHOY, Martin Man Ting': 'P36',
-  'Dr. DUAN, Yang': 'P06',
-  'Dr. LAI, Jean Hok Yin': 'P03',
-  'Dr. LI, Kristen Yuanxi': 'P39',
-  'Dr. LIU, Jing': 'P07',
-  'Dr. MA, Shichao': 'P17',
-  'Dr. SHEK, Sarah Pui Wah': 'P32',
-  'Dr. WANG, Kevin King Hang': 'P26',
-  'Dr. XIAN, Poline Yin': 'P04',
-  'Dr. YU, Wilson Shih Bun': 'P01',
-  'Dr. ZHANG, Ce': 'P31',
-  'Prof. CHANG, Song': 'P40',
-  'Prof. CHEN, Amy Y.Y.': 'P05',
-  'Prof. CHEN, Jie': 'P22',
-  'Prof. CHEN, Li': 'P19',
-  'Prof. CHEN, Yifan': 'P37',
-  'Prof. CHEUNG, William Kwok Wai': 'P38',
-  'Prof. CHEUNG, Yiu Ming': 'P28',
-  'Prof. CHOI, Byron Koon Kau': 'P25',
-  'Prof. DAI, Henry Hong Ning': 'P29',
-  'Prof. GUO, Xiaoqing': 'P30',
-  'Prof. HAN, Bo': 'P20',
-  'Prof. HUANG, Longkai': 'P18',
-  'Prof. HUANG, Xin': 'P33',
-  'Prof. LEUNG, Yiu Wing': 'P21',
-  'Prof. LIU, Yang': 'P15',
-  'Prof. MA, Jing': 'P10',
-  'Prof. TAI, Samson Kin Hon': 'P02',
-  'Prof. WAN, Monique Shui Ki': 'P08',
-  'Prof. WAN, Renjie': 'P13',
-  'Prof. WANG, Juncheng': 'P27',
-  'Prof. XU, Jianliang': 'P09',
-  'Prof. YANG, Renchi': 'P24',
-  'Prof. YUEN, Pong Chi': 'P14',
-  'Prof. ZHANG, Eric Lu': 'P34',
-  'Prof. ZHOU, Amelie Chi': 'P12',
-  'Prof. ZHOU, Kaiyang': 'P16',
-};
-
 const autoSlotId = (index: number): string => `AUTO_SLOT_${String(index + 1).padStart(3, '0')}`;
 
 const pickValue = (row: TabularRow, aliases: string[]): string => {
@@ -130,6 +88,7 @@ const getAvailabilityResolveMode = (
 
 interface ParseAvailabilityOptions {
   resolveStrategy?: AvailabilityResolveStrategy;
+  professorDirectory?: ProfessorDirectory;
 }
 
 export interface ProfessorDirectory {
@@ -160,7 +119,7 @@ const normalizeProfessorId = (profIdRaw: string): string => {
     }
   }
 
-  return compact;
+  return profId;
 };
 
 const extractProfessorId = (value: string): string => {
@@ -179,10 +138,6 @@ const stripProfessorIdFragments = (value: string): string => String(value || '')
   .replace(/[()\[\]{}_,.:;\\/|-]+/g, ' ')
   .replace(/\s+/g, ' ')
   .trim();
-
-const buildProfessorLabel = (id: string, name?: string): string => {
-  return name ? `${id} ${name}` : id;
-};
 
 const registerProfessorAlias = (
   aliasToId: Record<string, string>,
@@ -451,17 +406,12 @@ export const buildProfessorDirectory = async (file: File): Promise<ProfessorDire
   const idToName: Record<string, string> = {};
   const aliasToId: Record<string, string> = {};
 
-  Object.entries(fallbackProfessorNameToId).forEach(([name, id]) => {
-    idToName[id] = name;
-    registerProfessorAlias(aliasToId, id, id);
-    registerProfessorAlias(aliasToId, name, id);
-    registerProfessorAlias(aliasToId, `${id} ${name}`, id);
-    registerProfessorAlias(aliasToId, `${name} ${id}`, id);
-  });
-
   data.forEach((row) => {
-    const professorId = normalizeProfessorId(pickValue(row, ['professorId', 'ProfessorId', 'id', 'ID']));
-    const professorName = pickValue(row, ['professorName', 'ProfessorName', 'name', 'Name']);
+    const rawProfessorRef = pickValue(row, ['professorId', 'ProfessorId', 'id', 'ID']);
+    const resolvedProfessor = resolveProfessorReference(rawProfessorRef, { idToName, aliasToId, options: [] });
+    const professorId = resolvedProfessor.id;
+    const explicitProfessorName = pickValue(row, ['professorName', 'ProfessorName', 'name', 'Name']);
+    const professorName = explicitProfessorName || (professorId && rawProfessorRef !== professorId ? rawProfessorRef : '');
     if (!professorId) return;
 
     if (professorName && !idToName[professorId]) {
@@ -481,7 +431,7 @@ export const buildProfessorDirectory = async (file: File): Promise<ProfessorDire
     .map((id) => ({
       id,
       name: idToName[id],
-      label: buildProfessorLabel(id, idToName[id]),
+      label: id,
     }));
 
   return { idToName, aliasToId, options };
@@ -587,6 +537,7 @@ export const parseAvailability = async (
   const map: Record<string, Set<string>> = {};
   const { slotKeyToId, slotTimeMeta } = buildSlotResolvers(slots || []);
   const resolveStrategy = options?.resolveStrategy ?? 'inherit-cell';
+  const professorDirectory = options?.professorDirectory;
 
   const addResolvedSlots = (
     profId: string,
@@ -608,7 +559,10 @@ export const parseAvailability = async (
 
   if (isCompactFormat) {
     data.forEach((row) => {
-      const profId = normalizeProfessorId(pickValue(row, ['professorId', 'ProfessorId', 'id', 'ID']));
+      const profId = resolveProfessorReference(
+        pickValue(row, ['professorId', 'ProfessorId', 'id', 'ID']),
+        professorDirectory
+      ).id;
       const slotsStr = pickValue(row, ['availableSlots', 'AvailableSlots']);
       if (!profId) return;
       const resolveMode = getAvailabilityResolveMode(slotsStr, resolveStrategy);
@@ -625,7 +579,10 @@ export const parseAvailability = async (
   });
 
   data.forEach((row) => {
-    const profId = normalizeProfessorId(pickValue(row, ['professorId', 'ProfessorId', 'id', 'ID']));
+    const profId = resolveProfessorReference(
+      pickValue(row, ['professorId', 'ProfessorId', 'id', 'ID']),
+      professorDirectory
+    ).id;
     if (!profId) return;
 
     timeColumns.forEach((column) => {

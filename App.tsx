@@ -1,6 +1,6 @@
 ﻿// File: fyp-scheduler/App.tsx
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Bot, Play, AlertCircle, Loader2, Sparkles, AlertTriangle } from 'lucide-react';
 import FileUpload from './components/FileUpload';
 import ProfPreferenceInput from './components/ProfPreferenceInput';
@@ -9,6 +9,7 @@ import { buildProfessorDirectory, deriveSlots, parseStudents, parseRooms, parseA
 import type { AvailabilityResolveStrategy } from './utils/csvHelper';
 import { generateSchedule, type SolverMode } from './utils/scheduler';
 import { Slot, RoomSlot, ScheduleResult, SolvingStatus, ValidationResult, ProfPreference, ProfessorOption } from './types';
+import { I18nProvider, languageOptions, localizeValidationIssue, useI18n } from './i18n';
 
 interface AiAdviceResponse {
   bottleneck_professors?: string[];
@@ -18,7 +19,25 @@ interface AiAdviceResponse {
 
 const PROF_AVAILABILITY_RESOLVE_STRATEGY: AvailabilityResolveStrategy = 'overlap';
 
-const App: React.FC = () => {
+const normalizeUiMessage = (message: string, t: (key: string) => string): string => {
+  switch (message) {
+    case 'CP-SAT 求解失敗':
+      return t('errors.scheduleFailed');
+    case 'PuLP ILP 求解失敗':
+      return t('errors.scheduleFailed');
+    case 'Legacy Python 求解失敗':
+      return t('errors.scheduleFailed');
+    case 'AI 分析失敗':
+      return t('errors.aiFailed');
+    case 'AI 分析失敗，請稍後再試':
+      return t('errors.aiFailedRetry');
+    default:
+      return message;
+  }
+};
+
+const AppContent: React.FC = () => {
+  const { locale, setLocale, t } = useI18n();
   const [studentFile, setStudentFile] = useState<File | null>(null);
   const [roomFile, setRoomFile] = useState<File | null>(null);
   const [slotsFile, setSlotsFile] = useState<File | null>(null);
@@ -42,6 +61,11 @@ const App: React.FC = () => {
   const [isAskingAi, setIsAskingAi] = useState(false);
   const [aiAdvice, setAiAdvice] = useState<AiAdviceResponse | null>(null);
 
+  const localizedValidationIssues = useMemo(
+    () => validationResult?.issues.map((issue) => ({ ...issue, message: localizeValidationIssue(issue.message, t) })) ?? [],
+    [validationResult, t]
+  );
+
   const handleReset = () => {
     setStudentFile(null);
     setRoomFile(null);
@@ -64,6 +88,7 @@ const App: React.FC = () => {
         const professorDirectory = await buildProfessorDirectory(file);
         const profsData = await parseAvailability(file, undefined, {
           resolveStrategy: PROF_AVAILABILITY_RESOLVE_STRATEGY,
+          professorDirectory,
         });
         setAvailableProfessors(professorDirectory.options);
         setProfAvailability(profsData);
@@ -80,7 +105,7 @@ const App: React.FC = () => {
 
   const startProcessing = async () => {
     if (!studentFile || !roomFile || !profFile) {
-      setErrorMessage('請至少上傳學生、房間與教授可用時間 3 份檔案。');
+      setErrorMessage(t('errors.requiredFiles'));
       return;
     }
 
@@ -96,14 +121,15 @@ const App: React.FC = () => {
         availabilityFile: profFile,
       });
       if (slotsData.length === 0) {
-        throw new Error('找不到任何可用時段。請上傳時段檔，或使用包含日期與時段欄位的房間/教授檔案。');
+        throw new Error(t('errors.noSlotsFound'));
       }
 
       const roomsData = await parseRooms(roomFile, slotsData);
+      const professorDirectory = await buildProfessorDirectory(profFile);
       const profsData = await parseAvailability(profFile, slotsData, {
         resolveStrategy: PROF_AVAILABILITY_RESOLVE_STRATEGY,
+        professorDirectory,
       });
-      const professorDirectory = await buildProfessorDirectory(profFile);
       const studentsData = await parseStudents(studentFile, professorDirectory);
 
       setProfAvailability(profsData);
@@ -116,7 +142,7 @@ const App: React.FC = () => {
 
       if (!valResult.isValid) {
         setStatus('error');
-        setErrorMessage('資料驗證失敗，請檢查 CSV 內容與 ID 對應。');
+        setErrorMessage(t('errors.validationFailed'));
         return;
       }
 
@@ -159,11 +185,11 @@ const App: React.FC = () => {
         setStatus(result.success ? 'success' : 'partial');
       } catch (err: any) {
         setStatus('failed');
-        setErrorMessage(err.message || '排程計算失敗。');
+        setErrorMessage(normalizeUiMessage(err.message || '', t) || t('errors.scheduleFailed'));
       }
     } catch (err: any) {
       setStatus('error');
-      setErrorMessage(err.message || '檔案解析失敗，請確認 CSV 格式。');
+      setErrorMessage(normalizeUiMessage(err.message || '', t) || t('errors.parseFailed'));
     }
   };
 
@@ -189,15 +215,15 @@ const App: React.FC = () => {
 
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(data?.error || 'AI 分析失敗');
+        throw new Error(data?.error || t('errors.aiFailed'));
       }
 
       setAiAdvice(data);
     } catch (e: any) {
       console.error('AI request error:', e);
-      const errorMsg = e?.message || 'AI 分析失敗，請稍後再試';
+      const errorMsg = normalizeUiMessage(e?.message || '', t) || t('errors.aiFailedRetry');
       setAiAdvice({ analysis: errorMsg, suggestions: [] });
-      setErrorMessage(`AI 分析失敗: ${errorMsg}`);
+      setErrorMessage(`${t('errors.aiFailed')}: ${errorMsg}`);
     } finally {
       setIsAskingAi(false);
     }
@@ -212,10 +238,24 @@ const App: React.FC = () => {
               <Bot className="w-6 h-6 text-white" />
             </div>
             <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-violet-600">
-              FYP AutoScheduler Pro
+              {t('app.brand')}
             </h1>
           </div>
           <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 bg-gray-100 rounded-full p-1">
+              <span className="px-2 text-xs font-medium text-gray-500">{t('app.language')}</span>
+              {languageOptions.map((option) => (
+                <button
+                  key={option.locale}
+                  onClick={() => setLocale(option.locale)}
+                  className={`px-3 py-1 text-xs font-semibold rounded-full transition-colors ${
+                    locale === option.locale ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-600 hover:text-gray-800'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
             {status === 'partial' && (
               <button
                 onClick={handleAskAi}
@@ -223,7 +263,7 @@ const App: React.FC = () => {
                 className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-sm rounded-full shadow-sm hover:shadow-md transition-all"
               >
                 {isAskingAi ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                AI 分析建議
+                {t('actions.aiAdvice')}
               </button>
             )}
           </div>
@@ -235,10 +275,10 @@ const App: React.FC = () => {
           <div className="mb-6 bg-red-50 border border-red-200 rounded-xl p-6">
             <h3 className="text-lg font-bold text-red-800 flex items-center gap-2 mb-4">
               <AlertTriangle className="w-5 h-5" />
-              資料驗證問題
+              {t('titles.validationIssues')}
             </h3>
             <ul className="list-disc list-inside space-y-1 text-sm text-red-700 max-h-60 overflow-y-auto">
-              {validationResult.issues.map((issue, idx) => (
+              {localizedValidationIssues.map((issue, idx) => (
                 <li key={idx}>{issue.message}</li>
               ))}
             </ul>
@@ -251,14 +291,14 @@ const App: React.FC = () => {
               <div className="mb-6 bg-purple-50 border border-purple-200 rounded-xl p-6 relative">
                 <h3 className="text-md font-bold text-purple-900 flex items-center gap-2 mb-2">
                   <Sparkles className="w-4 h-4 text-purple-600" />
-                  AI 分析報告
+                  {t('titles.aiReport')}
                 </h3>
 
                 {aiAdvice.bottleneck_professors &&
                   Array.isArray(aiAdvice.bottleneck_professors) &&
                   aiAdvice.bottleneck_professors.length > 0 && (
                     <div className="mb-2 text-sm">
-                      <span className="font-bold text-purple-800">瓶頸教授: </span>
+                      <span className="font-bold text-purple-800">{t('labels.bottleneckProfessors')} </span>
                       {aiAdvice.bottleneck_professors.join(', ')}
                     </div>
                   )}
@@ -277,7 +317,7 @@ const App: React.FC = () => {
                   onClick={() => setAiAdvice(null)}
                   className="absolute top-4 right-4 text-purple-400 hover:text-purple-600"
                 >
-                  &times;
+                  {t('actions.close')}
                 </button>
               </div>
             )}
@@ -291,8 +331,8 @@ const App: React.FC = () => {
         ) : (
           <div className="max-w-4xl mx-auto">
             <div className="text-center mb-10">
-              <h2 className="text-3xl font-extrabold text-gray-900 mb-4">智慧 FYP 口試排程系統 v4.1</h2>
-              <p className="text-lg text-gray-600">Web Worker | 軟限制優化 | 資料驗證 | 手動調整</p>
+              <h2 className="text-3xl font-extrabold text-gray-900 mb-4">{t('app.heroTitle')}</h2>
+              <p className="text-lg text-gray-600">{t('app.heroSubtitle')}</p>
             </div>
 
             <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
@@ -301,7 +341,7 @@ const App: React.FC = () => {
                   <div className="mb-6 bg-red-50 border-l-4 border-red-500 p-4 rounded-r flex items-start gap-3">
                     <AlertCircle className="w-5 h-5 text-red-600 mt-0.5" />
                     <div>
-                      <h3 className="text-sm font-bold text-red-800">執行失敗</h3>
+                      <h3 className="text-sm font-bold text-red-800">{t('errors.executionFailed')}</h3>
                       <p className="text-sm text-red-700 mt-1">{errorMessage}</p>
                     </div>
                   </div>
@@ -309,27 +349,27 @@ const App: React.FC = () => {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <FileUpload
-                    label="1. 學生資料 (Students)"
-                    description="支援 P number、教授姓名，或兩者混寫；欄位可為 id/name/supervisorId/observerId，或 Students/Supervisor/Observer"
+                    label={t('uploads.student.label')}
+                    description={t('uploads.student.description')}
                     file={studentFile}
                     onFileSelect={setStudentFile}
                   />
                   <FileUpload
-                    label="2. 時段資料 (Slots，可選)"
-                    description="可省略；系統會嘗試從房間檔或教授檔自動抽取時段"
+                    label={t('uploads.slots.label')}
+                    description={t('uploads.slots.description')}
                     requiredHeaders={['id', 'timeLabel']}
                     file={slotsFile}
                     onFileSelect={setSlotsFile}
                   />
                   <FileUpload
-                    label="3. 房間資料 (Rooms)"
-                    description="支援兩種格式：id/name/availableSlots，或 Date + Time Slot + Venue"
+                    label={t('uploads.rooms.label')}
+                    description={t('uploads.rooms.description')}
                     file={roomFile}
                     onFileSelect={setRoomFile}
                   />
                   <FileUpload
-                    label="4. 教授可用時間 (Availability)"
-                    description="支援兩種格式：professorId + availableSlots，或 ID + Name + 各時段欄位"
+                    label={t('uploads.availability.label')}
+                    description={t('uploads.availability.description')}
                     file={profFile}
                     onFileSelect={handleProfFileSelect}
                   />
@@ -343,18 +383,17 @@ const App: React.FC = () => {
 
                 <div className="mt-8 pt-6 border-t border-gray-100">
                   <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">求解器</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">{t('form.solver')}</label>
                     <select
                       value={solverMode}
                       onChange={(e) => setSolverMode(e.target.value as SolverMode)}
                       className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700"
                     >
-                      <option value="cp-sat">CP-SAT（推薦）</option>
-                      <option value="legacy">Legacy Worker</option>
+                      <option value="cp-sat">{t('solver.cpSat')}</option>
+                      <option value="pulp-ilp">{t('solver.pulp')}</option>
+                      <option value="legacy-python">{t('solver.legacy')}</option>
                     </select>
-                    <p className="mt-2 text-xs text-gray-500">
-                      `CP-SAT` 會呼叫本地 Python `ortools` API；`Legacy Worker` 則使用原本的前端 heuristic solver。
-                    </p>
+                    <p className="mt-2 text-xs text-gray-500">{t('solver.help')}</p>
                   </div>
                   <button
                     onClick={startProcessing}
@@ -368,22 +407,22 @@ const App: React.FC = () => {
                   >
                     {status === 'parsing' && (
                       <>
-                        <Loader2 className="w-6 h-6 animate-spin" /> 解析資料中...
+                        <Loader2 className="w-6 h-6 animate-spin" /> {t('status.parsing')}
                       </>
                     )}
                     {status === 'validating' && (
                       <>
-                        <Loader2 className="w-6 h-6 animate-spin" /> 驗證資料中...
+                        <Loader2 className="w-6 h-6 animate-spin" /> {t('status.validating')}
                       </>
                     )}
                     {status === 'solving' && (
                       <>
-                        <Loader2 className="w-6 h-6 animate-spin" /> 正在產生排程...
+                        <Loader2 className="w-6 h-6 animate-spin" /> {t('status.solving')}
                       </>
                     )}
                     {(status === 'idle' || status === 'error' || status === 'failed') && (
                       <>
-                        <Play className="w-6 h-6 fill-current" /> 開始自動排程
+                        <Play className="w-6 h-6 fill-current" /> {t('actions.startScheduling')}
                       </>
                     )}
                   </button>
@@ -394,6 +433,14 @@ const App: React.FC = () => {
         )}
       </main>
     </div>
+  );
+};
+
+const App: React.FC = () => {
+  return (
+    <I18nProvider>
+      <AppContent />
+    </I18nProvider>
   );
 };
 
