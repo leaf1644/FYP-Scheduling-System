@@ -1,4 +1,4 @@
-import { Student, Slot, Room, ValidationResult, ValidationIssue } from '../types';
+import { Student, Slot, Room, ValidationResult, ValidationIssue, ProfessorOption } from '../types';
 import { parseTabularFile, TabularRow } from './tabularParser';
 
 const splitList = (str: string | undefined): string[] => {
@@ -9,6 +9,12 @@ const splitList = (str: string | undefined): string[] => {
 const normalizeHeader = (value: string): string => value.toLowerCase().replace(/[\s_]+/g, '').trim();
 
 const normalizeKey = (value: string): string => value.toLowerCase().replace(/\s+/g, ' ').trim();
+
+const normalizeProfessorAlias = (value: string): string => value
+  .toLowerCase()
+  .replace(/[()\[\]{}_,.:;\\/|-]+/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim();
 
 const monthMap: Record<string, number> = {
   jan: 1,
@@ -35,6 +41,48 @@ const monthMap: Record<string, number> = {
   november: 11,
   dec: 12,
   december: 12,
+};
+
+const fallbackProfessorNameToId: Record<string, string> = {
+  'Dr. CHAN, Jacky Chun Pong': 'P11',
+  'Dr. CHEUNG, Jamie Y.H.': 'P35',
+  'Dr. CHOY, Martin Man Ting': 'P36',
+  'Dr. DUAN, Yang': 'P06',
+  'Dr. LAI, Jean Hok Yin': 'P03',
+  'Dr. LI, Kristen Yuanxi': 'P39',
+  'Dr. LIU, Jing': 'P07',
+  'Dr. MA, Shichao': 'P17',
+  'Dr. SHEK, Sarah Pui Wah': 'P32',
+  'Dr. WANG, Kevin King Hang': 'P26',
+  'Dr. XIAN, Poline Yin': 'P04',
+  'Dr. YU, Wilson Shih Bun': 'P01',
+  'Dr. ZHANG, Ce': 'P31',
+  'Prof. CHANG, Song': 'P40',
+  'Prof. CHEN, Amy Y.Y.': 'P05',
+  'Prof. CHEN, Jie': 'P22',
+  'Prof. CHEN, Li': 'P19',
+  'Prof. CHEN, Yifan': 'P37',
+  'Prof. CHEUNG, William Kwok Wai': 'P38',
+  'Prof. CHEUNG, Yiu Ming': 'P28',
+  'Prof. CHOI, Byron Koon Kau': 'P25',
+  'Prof. DAI, Henry Hong Ning': 'P29',
+  'Prof. GUO, Xiaoqing': 'P30',
+  'Prof. HAN, Bo': 'P20',
+  'Prof. HUANG, Longkai': 'P18',
+  'Prof. HUANG, Xin': 'P33',
+  'Prof. LEUNG, Yiu Wing': 'P21',
+  'Prof. LIU, Yang': 'P15',
+  'Prof. MA, Jing': 'P10',
+  'Prof. TAI, Samson Kin Hon': 'P02',
+  'Prof. WAN, Monique Shui Ki': 'P08',
+  'Prof. WAN, Renjie': 'P13',
+  'Prof. WANG, Juncheng': 'P27',
+  'Prof. XU, Jianliang': 'P09',
+  'Prof. YANG, Renchi': 'P24',
+  'Prof. YUEN, Pong Chi': 'P14',
+  'Prof. ZHANG, Eric Lu': 'P34',
+  'Prof. ZHOU, Amelie Chi': 'P12',
+  'Prof. ZHOU, Kaiyang': 'P16',
 };
 
 const autoSlotId = (index: number): string => `AUTO_SLOT_${String(index + 1).padStart(3, '0')}`;
@@ -84,6 +132,12 @@ interface ParseAvailabilityOptions {
   resolveStrategy?: AvailabilityResolveStrategy;
 }
 
+export interface ProfessorDirectory {
+  idToName: Record<string, string>;
+  aliasToId: Record<string, string>;
+  options: ProfessorOption[];
+}
+
 const normalizeProfessorId = (profIdRaw: string): string => {
   const profId = profIdRaw.trim();
   if (!profId) return '';
@@ -107,6 +161,73 @@ const normalizeProfessorId = (profIdRaw: string): string => {
   }
 
   return compact;
+};
+
+const extractProfessorId = (value: string): string => {
+  const compact = String(value || '').replace(/\s+/g, '').toUpperCase();
+  const match = compact.match(/([A-Z]+)0*(\d+)/);
+  if (!match) return '';
+
+  const [, prefix, numericPart] = match;
+  const n = Number(numericPart);
+  if (Number.isNaN(n)) return '';
+  return `${prefix}${String(n).padStart(2, '0')}`;
+};
+
+const stripProfessorIdFragments = (value: string): string => String(value || '')
+  .replace(/\b[A-Za-z]+\s*0*\d+\b/g, ' ')
+  .replace(/[()\[\]{}_,.:;\\/|-]+/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim();
+
+const buildProfessorLabel = (id: string, name?: string): string => {
+  return name ? `${id} ${name}` : id;
+};
+
+const registerProfessorAlias = (
+  aliasToId: Record<string, string>,
+  aliasRaw: string | undefined,
+  professorId: string
+) => {
+  const normalized = normalizeProfessorAlias(aliasRaw || '');
+  if (!normalized) return;
+  aliasToId[normalized] = professorId;
+};
+
+const resolveProfessorReference = (
+  value: string,
+  professorDirectory?: ProfessorDirectory
+): { id: string; name?: string } => {
+  const raw = String(value || '').trim();
+  if (!raw) return { id: '' };
+
+  const normalizedId = normalizeProfessorId(raw);
+  if (!professorDirectory) {
+    return { id: normalizedId };
+  }
+
+  if (professorDirectory.idToName[normalizedId] || professorDirectory.options.some((option) => option.id === normalizedId)) {
+    return { id: normalizedId, name: professorDirectory.idToName[normalizedId] };
+  }
+
+  const extractedId = extractProfessorId(raw);
+  if (extractedId && (professorDirectory.idToName[extractedId] || professorDirectory.options.some((option) => option.id === extractedId))) {
+    return { id: extractedId, name: professorDirectory.idToName[extractedId] };
+  }
+
+  const aliasCandidates = [
+    normalizeProfessorAlias(raw),
+    normalizeProfessorAlias(stripProfessorIdFragments(raw)),
+  ].filter(Boolean);
+
+  for (const candidate of aliasCandidates) {
+    const resolvedId = professorDirectory.aliasToId[candidate];
+    if (resolvedId) {
+      return { id: resolvedId, name: professorDirectory.idToName[resolvedId] };
+    }
+  }
+
+  return { id: normalizedId || raw };
 };
 
 interface ParsedTimeRange {
@@ -325,15 +446,69 @@ export const deriveSlots = async ({
   return [];
 };
 
-export const parseStudents = async (file: File): Promise<Student[]> => {
+export const buildProfessorDirectory = async (file: File): Promise<ProfessorDirectory> => {
+  const data = await parseTabularFile(file);
+  const idToName: Record<string, string> = {};
+  const aliasToId: Record<string, string> = {};
+
+  Object.entries(fallbackProfessorNameToId).forEach(([name, id]) => {
+    idToName[id] = name;
+    registerProfessorAlias(aliasToId, id, id);
+    registerProfessorAlias(aliasToId, name, id);
+    registerProfessorAlias(aliasToId, `${id} ${name}`, id);
+    registerProfessorAlias(aliasToId, `${name} ${id}`, id);
+  });
+
+  data.forEach((row) => {
+    const professorId = normalizeProfessorId(pickValue(row, ['professorId', 'ProfessorId', 'id', 'ID']));
+    const professorName = pickValue(row, ['professorName', 'ProfessorName', 'name', 'Name']);
+    if (!professorId) return;
+
+    if (professorName && !idToName[professorId]) {
+      idToName[professorId] = professorName;
+    }
+
+    registerProfessorAlias(aliasToId, professorId, professorId);
+    registerProfessorAlias(aliasToId, professorName, professorId);
+    registerProfessorAlias(aliasToId, `${professorId} ${professorName}`, professorId);
+    registerProfessorAlias(aliasToId, `${professorName} ${professorId}`, professorId);
+  });
+
+  const options = Object.keys(aliasToId)
+    .map((alias) => aliasToId[alias])
+    .filter((value, index, arr) => arr.indexOf(value) === index)
+    .sort()
+    .map((id) => ({
+      id,
+      name: idToName[id],
+      label: buildProfessorLabel(id, idToName[id]),
+    }));
+
+  return { idToName, aliasToId, options };
+};
+
+export const parseStudents = async (file: File, professorDirectory?: ProfessorDirectory): Promise<Student[]> => {
   const data = await parseTabularFile(file);
   return data
-    .map((row, index) => ({
-      id: pickValue(row, ['id', 'ID', 'studentId', 'StudentID']) || `S${index + 1}`,
-      name: pickValue(row, ['name', 'Name', 'student', 'Student', 'students', 'Students']),
-      supervisorId: normalizeProfessorId(pickValue(row, ['supervisorId', 'SupervisorId', 'supervisor', 'Supervisor'])),
-      observerId: normalizeProfessorId(pickValue(row, ['observerId', 'ObserverId', 'observer', 'Observer'])),
-    }))
+    .map((row, index) => {
+      const supervisor = resolveProfessorReference(
+        pickValue(row, ['supervisorId', 'SupervisorId', 'supervisor', 'Supervisor']),
+        professorDirectory
+      );
+      const observer = resolveProfessorReference(
+        pickValue(row, ['observerId', 'ObserverId', 'observer', 'Observer']),
+        professorDirectory
+      );
+
+      return {
+        id: pickValue(row, ['id', 'ID', 'studentId', 'StudentID']) || `S${index + 1}`,
+        name: pickValue(row, ['name', 'Name', 'student', 'Student', 'students', 'Students']),
+        supervisorId: supervisor.id,
+        observerId: observer.id,
+        supervisorName: supervisor.name,
+        observerName: observer.name,
+      };
+    })
     .filter((s) => s.name);
 };
 

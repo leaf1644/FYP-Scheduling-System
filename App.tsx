@@ -5,10 +5,10 @@ import { Bot, Play, AlertCircle, Loader2, Sparkles, AlertTriangle } from 'lucide
 import FileUpload from './components/FileUpload';
 import ProfPreferenceInput from './components/ProfPreferenceInput';
 import ScheduleDashboard from './components/ScheduleDashboard';
-import { deriveSlots, parseStudents, parseRooms, parseAvailability, validateData } from './utils/csvHelper';
+import { buildProfessorDirectory, deriveSlots, parseStudents, parseRooms, parseAvailability, validateData } from './utils/csvHelper';
 import type { AvailabilityResolveStrategy } from './utils/csvHelper';
 import { generateSchedule, type SolverMode } from './utils/scheduler';
-import { Slot, RoomSlot, ScheduleResult, SolvingStatus, ValidationResult, ProfPreference } from './types';
+import { Slot, RoomSlot, ScheduleResult, SolvingStatus, ValidationResult, ProfPreference, ProfessorOption } from './types';
 
 interface AiAdviceResponse {
   bottleneck_professors?: string[];
@@ -36,7 +36,7 @@ const App: React.FC = () => {
 
   // Professor Preferences
   const [profPreferences, setProfPreferences] = useState<Record<string, ProfPreference>>({});
-  const [availableProfessors, setAvailableProfessors] = useState<string[]>([]);
+  const [availableProfessors, setAvailableProfessors] = useState<ProfessorOption[]>([]);
 
   // Gemini AI State
   const [isAskingAi, setIsAskingAi] = useState(false);
@@ -61,11 +61,11 @@ const App: React.FC = () => {
     setProfFile(file);
     if (file) {
       try {
+        const professorDirectory = await buildProfessorDirectory(file);
         const profsData = await parseAvailability(file, undefined, {
           resolveStrategy: PROF_AVAILABILITY_RESOLVE_STRATEGY,
         });
-        const profIds = Object.keys(profsData).sort();
-        setAvailableProfessors(profIds);
+        setAvailableProfessors(professorDirectory.options);
         setProfAvailability(profsData);
       } catch (err) {
         console.warn('Could not extract professors from file yet:', err);
@@ -103,9 +103,11 @@ const App: React.FC = () => {
       const profsData = await parseAvailability(profFile, slotsData, {
         resolveStrategy: PROF_AVAILABILITY_RESOLVE_STRATEGY,
       });
-      const studentsData = await parseStudents(studentFile);
+      const professorDirectory = await buildProfessorDirectory(profFile);
+      const studentsData = await parseStudents(studentFile, professorDirectory);
 
       setProfAvailability(profsData);
+      setAvailableProfessors(professorDirectory.options);
 
       // 2. Validate Data (Logic Check)
       setStatus('validating');
@@ -308,7 +310,7 @@ const App: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <FileUpload
                     label="1. 學生資料 (Students)"
-                    description="支援兩種格式：id/name/supervisorId/observerId，或 Students/Supervisor/Observer"
+                    description="支援 P number、教授姓名，或兩者混寫；欄位可為 id/name/supervisorId/observerId，或 Students/Supervisor/Observer"
                     file={studentFile}
                     onFileSelect={setStudentFile}
                   />
@@ -335,7 +337,7 @@ const App: React.FC = () => {
 
                 {availableProfessors.length > 0 && (
                   <div className="mt-8 pt-6 border-t border-gray-100">
-                    <ProfPreferenceInput professorIds={availableProfessors} onPreferencesChange={setProfPreferences} />
+                    <ProfPreferenceInput professorOptions={availableProfessors} onPreferencesChange={setProfPreferences} />
                   </div>
                 )}
 

@@ -1,13 +1,13 @@
 ﻿import React, { useState } from 'react';
-import { ProfPreference } from '../types';
+import { ProfPreference, ProfessorOption } from '../types';
 import { ChevronDown } from 'lucide-react';
 
 interface ProfPreferenceInputProps {
-  professorIds: string[];
+  professorOptions: ProfessorOption[];
   onPreferencesChange: (preferences: Record<string, ProfPreference>) => void;
 }
 
-const ProfPreferenceInput: React.FC<ProfPreferenceInputProps> = ({ professorIds, onPreferencesChange }) => {
+const ProfPreferenceInput: React.FC<ProfPreferenceInputProps> = ({ professorOptions, onPreferencesChange }) => {
   const [preferences, setPreferences] = useState<Record<string, ProfPreference>>({});
   const [expandedProf, setExpandedProf] = useState<string | null>(null);
 
@@ -37,7 +37,8 @@ const ProfPreferenceInput: React.FC<ProfPreferenceInputProps> = ({ professorIds,
       </p>
 
       <div className="space-y-3">
-        {professorIds.map((profId) => {
+        {professorOptions.map((professor) => {
+          const profId = professor.id;
           const pref = preferences[profId] || { type: 'CONCENTRATE' as const, weight: 10 };
           const isExpanded = expandedProf === profId;
 
@@ -48,7 +49,7 @@ const ProfPreferenceInput: React.FC<ProfPreferenceInputProps> = ({ professorIds,
                 className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 transition-colors"
               >
                 <div className="flex items-center gap-3 text-left">
-                  <span className="font-medium text-gray-900">{profId}</span>
+                  <span className="font-medium text-gray-900">{professor.label}</span>
                   <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">{pref.type}</span>
                   {pref.type === 'MAX_PER_DAY' && pref.target && (
                     <span className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded">
