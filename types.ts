@@ -3,6 +3,14 @@ export interface Student {
   name: string;
   supervisorId: string;
   observerId: string;
+  supervisorName?: string;
+  observerName?: string;
+}
+
+export interface ProfessorOption {
+  id: string;
+  name?: string;
+  label: string;
 }
 
 export interface Slot {

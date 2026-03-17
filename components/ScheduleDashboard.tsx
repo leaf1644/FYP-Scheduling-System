@@ -29,6 +29,10 @@ const getReadableUnscheduledDetails = (reason: string, details: string): string 
   return normalized;
 };
 
+const formatProfessorLabel = (id: string, name?: string): string => {
+  return name ? `${id} ${name}` : id;
+};
+
 const ScheduleDashboard: React.FC<Props> = ({ schedule, onReset, allRoomSlots, profAvailability }) => {
   const [viewMode, setViewMode] = useState<'time' | 'room' | 'prof'>('time');
   const [assignments, setAssignments] = useState(schedule.assignments);
@@ -38,6 +42,26 @@ const ScheduleDashboard: React.FC<Props> = ({ schedule, onReset, allRoomSlots, p
     setAssignments(schedule.assignments);
     setUnscheduled(schedule.unscheduled);
   }, [schedule]);
+
+  const professorLabelMap = useMemo(() => {
+    const map: Record<string, string> = {};
+
+    [...assignments.map((item) => item.student), ...unscheduled.map((item) => item.student)].forEach((student) => {
+      if (student.supervisorName) {
+        map[student.supervisorId] = formatProfessorLabel(student.supervisorId, student.supervisorName);
+      } else if (!map[student.supervisorId]) {
+        map[student.supervisorId] = student.supervisorId;
+      }
+
+      if (student.observerName) {
+        map[student.observerId] = formatProfessorLabel(student.observerId, student.observerName);
+      } else if (!map[student.observerId]) {
+        map[student.observerId] = student.observerId;
+      }
+    });
+
+    return map;
+  }, [assignments, unscheduled]);
 
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
@@ -127,8 +151,8 @@ const ScheduleDashboard: React.FC<Props> = ({ schedule, onReset, allRoomSlots, p
       Time: s.roomSlot.timeLabel,
       Room: s.roomSlot.roomName,
       Student: s.student.name,
-      Supervisor: s.student.supervisorId,
-      Observer: s.student.observerId,
+      Supervisor: formatProfessorLabel(s.student.supervisorId, s.student.supervisorName),
+      Observer: formatProfessorLabel(s.student.observerId, s.student.observerName),
     }));
 
     unscheduled.forEach((u) => {
@@ -137,8 +161,8 @@ const ScheduleDashboard: React.FC<Props> = ({ schedule, onReset, allRoomSlots, p
         Time: '',
         Room: '',
         Student: u.student.name,
-        Supervisor: u.student.supervisorId,
-        Observer: u.student.observerId,
+        Supervisor: formatProfessorLabel(u.student.supervisorId, u.student.supervisorName),
+        Observer: formatProfessorLabel(u.student.observerId, u.student.observerName),
       });
     });
 
@@ -236,9 +260,9 @@ const ScheduleDashboard: React.FC<Props> = ({ schedule, onReset, allRoomSlots, p
                 >
                   <div className="font-bold text-sm truncate">{u.student.name}</div>
                   <div className="text-xs opacity-80">{u.student.id}</div>
-                  <div className="text-[10px] flex gap-2 mt-1">
-                    <span className="bg-white/20 px-1 rounded">S: {u.student.supervisorId}</span>
-                    <span className="bg-white/20 px-1 rounded">O: {u.student.observerId}</span>
+                  <div className="text-[10px] flex flex-col gap-1 mt-1">
+                    <span className="bg-white/20 px-1 rounded">S: {formatProfessorLabel(u.student.supervisorId, u.student.supervisorName)}</span>
+                    <span className="bg-white/20 px-1 rounded">O: {formatProfessorLabel(u.student.observerId, u.student.observerName)}</span>
                   </div>
                 </div>
               ))}
@@ -302,10 +326,11 @@ const ScheduleDashboard: React.FC<Props> = ({ schedule, onReset, allRoomSlots, p
         <div className="p-6 bg-gray-50/50 min-h-[500px]">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {(Object.entries(groupedData) as Array<[string, typeof assignments]>).map(([groupKey, items]) => {
+              const groupLabel = viewMode === 'prof' ? (professorLabelMap[groupKey] || groupKey) : groupKey;
               return (
                 <div key={groupKey} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
                   <div className="bg-indigo-50 px-4 py-3 border-b border-indigo-100 flex justify-between items-center">
-                    <span className="font-bold text-indigo-900 flex items-center gap-2">{groupKey}</span>
+                    <span className="font-bold text-indigo-900 flex items-center gap-2">{groupLabel}</span>
                     <span className="text-xs bg-white px-2 py-1 rounded text-indigo-600 border border-indigo-100">{items.length}</span>
                   </div>
                   <div className="divide-y divide-gray-100">
@@ -345,14 +370,14 @@ const ScheduleDashboard: React.FC<Props> = ({ schedule, onReset, allRoomSlots, p
                                 viewMode === 'prof' && item.student.supervisorId === groupKey ? 'font-bold text-orange-700' : ''
                               }
                             >
-                              Sup: {item.student.supervisorId}
+                              Sup: {formatProfessorLabel(item.student.supervisorId, item.student.supervisorName)}
                             </div>
                             <div
                               className={
                                 viewMode === 'prof' && item.student.observerId === groupKey ? 'font-bold text-blue-700' : ''
                               }
                             >
-                              Obs: {item.student.observerId}
+                              Obs: {formatProfessorLabel(item.student.observerId, item.student.observerName)}
                             </div>
                           </div>
                         </div>
@@ -441,12 +466,12 @@ const ScheduleDashboard: React.FC<Props> = ({ schedule, onReset, allRoomSlots, p
                     </td>
                     <td className="px-6 py-4">
                       <span className="inline-block bg-orange-100 text-orange-800 text-xs font-semibold px-2 py-1 rounded">
-                        {item.student.supervisorId}
+                        {formatProfessorLabel(item.student.supervisorId, item.student.supervisorName)}
                       </span>
                     </td>
                     <td className="px-6 py-4">
                       <span className="inline-block bg-blue-100 text-blue-800 text-xs font-semibold px-2 py-1 rounded">
-                        {item.student.observerId}
+                        {formatProfessorLabel(item.student.observerId, item.student.observerName)}
                       </span>
                     </td>
                   </tr>
