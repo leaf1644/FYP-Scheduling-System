@@ -281,29 +281,80 @@ def summarize_unscheduled(ctx, student_index):
     return {"reason": "PROF_BUSY", "details": "可用時段已被其他安排占用，或教授在同時段有衝堂。"}
 
 
+def try_repair_placement(ctx, student_index, depth_remaining, visiting_students, reserved_slot_ids):
+    if has_timed_out(ctx["start_time"], ctx["timeout_ms"]) or depth_remaining < 0 or student_index in visiting_students:
+        return False
+
+    visiting_students.add(student_index)
+    current_assignment = ctx["assignments"][student_index]
+    candidates = [
+        slot for slot in ctx["students"][student_index]["valid_room_slots"]
+        if slot["id"] not in reserved_slot_ids
+    ]
+    candidates = sorted(
+        candidates,
+        key=cmp_to_key(lambda left, right: compare_candidate_slots(ctx, ctx["assignments"], student_index, left, right)),
+    )
+
+    for candidate in candidates:
+        if current_assignment and current_assignment["roomSlot"]["id"] == candidate["id"]:
+            visiting_students.remove(student_index)
+            return True
+
+        blockers = get_blocking_student_indices(ctx, ctx["assignments"], student_index, candidate)
+        if blockers and depth_remaining == 0:
+            continue
+
+        snapshot = clone_assignments(ctx["assignments"])
+        ctx["assignments"][student_index] = None
+        for blocker_index in blockers:
+            ctx["assignments"][blocker_index] = None
+
+        next_reserved = set(reserved_slot_ids)
+        next_reserved.add(candidate["id"])
+        ordered_blockers = sorted(
+            blockers,
+            key=lambda idx: len(ctx["students"][idx]["valid_room_slots"]),
+        )
+
+        repaired = True
+        for blocker_index in ordered_blockers:
+            if not try_repair_placement(ctx, blocker_index, depth_remaining - 1, visiting_students, set(next_reserved)):
+                repaired = False
+                break
+
+        if repaired and is_valid_move(ctx, student_index, candidate):
+            ctx["assignments"][student_index] = {"studentIndex": student_index, "roomSlot": candidate}
+            visiting_students.remove(student_index)
+            return True
+
+        ctx["assignments"] = snapshot
+
+    visiting_students.remove(student_index)
+    return False
+
+
 def repair_schedule(ctx, unscheduled_indices):
     remaining = unscheduled_indices[:]
     made_progress = True
     while made_progress and remaining and not has_timed_out(ctx["start_time"], ctx["timeout_ms"]):
         made_progress = False
         for idx in sorted(remaining, key=lambda x: (len(ctx["students"][x]["valid_room_slots"]), -len(ctx["conflict_graph"][x]))):
-            if try_repair(ctx, idx):
+            domain_size = len(ctx["students"][idx]["valid_room_slots"])
+            if domain_size == 0:
+                continue
+            depth_limit = 4 if domain_size <= 4 else (3 if domain_size <= 12 else 2)
+            if try_repair(ctx, idx, depth_limit):
                 remaining.remove(idx)
                 made_progress = True
     return remaining
 
 
-def try_repair(ctx, student_index):
-    # 簡化版 repair（原 TS 較複雜，此處保留核心邏輯以保持可讀性）
-    domain = ctx["students"][student_index]["valid_room_slots"]
-    for candidate in sorted(
-        domain,
-        key=cmp_to_key(lambda left, right: compare_candidate_slots(ctx, ctx["assignments"], student_index, left, right)),
-    ):
-        if is_valid_move(ctx, student_index, candidate):
-            ctx["assignments"][student_index] = {"studentIndex": student_index, "roomSlot": candidate}
-            return True
-    return False
+def try_repair(ctx, student_index, depth_limit=None):
+    if depth_limit is None:
+        domain_size = len(ctx["students"][student_index]["valid_room_slots"])
+        depth_limit = 4 if domain_size <= 4 else (3 if domain_size <= 12 else 2)
+    return try_repair_placement(ctx, student_index, depth_limit, set(), set())
 
 
 def main():
