@@ -150,11 +150,11 @@ def main():
     # 設定更好的 branching strategy
     solver.parameters.cp_model_presolve = True
     solver.parameters.linearization_level = 2
+    solver.parameters.search_branching = cp_model.PORTFOLIO_SEARCH
     solver.parameters.use_absl_random = True
     solver.parameters.random_seed = 42
     
     # 進一步優化策略
-    solver.parameters.max_num_concurrent_workers = 16
     solver.parameters.interleave_search = True
 
     status = solver.Solve(model)

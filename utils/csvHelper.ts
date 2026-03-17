@@ -62,6 +62,28 @@ const isAvailableCell = (value: unknown): boolean => {
   return true;
 };
 
+export type AvailabilityResolveMode = 'containment' | 'overlap';
+export type AvailabilityResolveStrategy = AvailabilityResolveMode | 'inherit-cell';
+
+const getAvailabilityResolveMode = (
+  value: unknown,
+  resolveStrategy: AvailabilityResolveStrategy = 'inherit-cell'
+): AvailabilityResolveMode => {
+  if (resolveStrategy === 'containment' || resolveStrategy === 'overlap') {
+    return resolveStrategy;
+  }
+
+  const normalized = String(value ?? '').trim().toLowerCase();
+  if (normalized.includes('if necessary') || normalized.includes('if needed')) {
+    return 'overlap';
+  }
+  return 'containment';
+};
+
+interface ParseAvailabilityOptions {
+  resolveStrategy?: AvailabilityResolveStrategy;
+}
+
 const normalizeProfessorId = (profIdRaw: string): string => {
   const profId = profIdRaw.trim();
   if (!profId) return '';
@@ -201,7 +223,8 @@ const buildSlotResolvers = (slots: Slot[]) => {
 const resolveAvailabilityToken = (
   token: string,
   slotKeyToId: Record<string, string>,
-  slotTimeMeta: SlotTimeMeta[]
+  slotTimeMeta: SlotTimeMeta[],
+  resolveMode: AvailabilityResolveMode = 'containment'
 ): string[] => {
   const normalizedToken = normalizeKey(token);
   const exactSlotId = slotKeyToId[normalizedToken];
@@ -213,6 +236,9 @@ const resolveAvailabilityToken = (
   const matched = slotTimeMeta
     .filter(({ range: slotRange }) => {
       if (range.dayKey && slotRange.dayKey && range.dayKey !== slotRange.dayKey) return false;
+      if (resolveMode === 'overlap') {
+        return slotRange.startMinutes < range.endMinutes && slotRange.endMinutes > range.startMinutes;
+      }
       return slotRange.startMinutes >= range.startMinutes && slotRange.endMinutes <= range.endMinutes;
     })
     .map(({ id }) => id);
@@ -379,15 +405,21 @@ export const parseRooms = async (file: File, slots?: Slot[]): Promise<Room[]> =>
 
 export const parseAvailability = async (
   file: File,
-  slots?: Slot[]
+  slots?: Slot[],
+  options?: ParseAvailabilityOptions
 ): Promise<Record<string, Set<string>>> => {
   const data = await parseTabularFile(file);
   const map: Record<string, Set<string>> = {};
   const { slotKeyToId, slotTimeMeta } = buildSlotResolvers(slots || []);
+  const resolveStrategy = options?.resolveStrategy ?? 'inherit-cell';
 
-  const addResolvedSlots = (profId: string, token: string) => {
+  const addResolvedSlots = (
+    profId: string,
+    token: string,
+    resolveMode: AvailabilityResolveMode = 'containment'
+  ) => {
     if (!profId) return;
-    const resolvedSlotIds = resolveAvailabilityToken(token, slotKeyToId, slotTimeMeta);
+    const resolvedSlotIds = resolveAvailabilityToken(token, slotKeyToId, slotTimeMeta, resolveMode);
     if (!map[profId]) map[profId] = new Set();
     resolvedSlotIds.forEach((slotId) => map[profId].add(slotId));
   };
@@ -404,7 +436,8 @@ export const parseAvailability = async (
       const profId = normalizeProfessorId(pickValue(row, ['professorId', 'ProfessorId', 'id', 'ID']));
       const slotsStr = pickValue(row, ['availableSlots', 'AvailableSlots']);
       if (!profId) return;
-      splitList(slotsStr).forEach((token) => addResolvedSlots(profId, token));
+      const resolveMode = getAvailabilityResolveMode(slotsStr, resolveStrategy);
+      splitList(slotsStr).forEach((token) => addResolvedSlots(profId, token, resolveMode));
     });
     return map;
   }
@@ -421,8 +454,9 @@ export const parseAvailability = async (
     if (!profId) return;
 
     timeColumns.forEach((column) => {
-      if (!isAvailableCell(row[column])) return;
-      addResolvedSlots(profId, column);
+      const cellValue = row[column];
+      if (!isAvailableCell(cellValue)) return;
+      addResolvedSlots(profId, column, getAvailabilityResolveMode(cellValue, resolveStrategy));
     });
   });
 

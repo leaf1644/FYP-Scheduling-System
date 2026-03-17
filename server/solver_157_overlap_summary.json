@@ -1,0 +1,349 @@
+{
+  "payloadMeta": {
+    "resolveStrategy": "overlap",
+    "studentCount": 166,
+    "slotCount": 54,
+    "roomCount": 10,
+    "roomSlotCount": 264,
+    "professorCount": 39
+  },
+  "solverStats": {
+    "legacy": {
+      "assignedCount": 157,
+      "unscheduledCount": 9,
+      "unscheduledBreakdown": {
+        "NO_COMMON_TIME": 7,
+        "PROF_BUSY": 2
+      }
+    },
+    "pulp": {
+      "assignedCount": 157,
+      "unscheduledCount": 9,
+      "unscheduledBreakdown": {
+        "NO_COMMON_TIME": 7,
+        "PROF_BUSY": 2
+      }
+    },
+    "cpsat": {
+      "assignedCount": 157,
+      "unscheduledCount": 9,
+      "unscheduledBreakdown": {
+        "NO_COMMON_TIME": 7,
+        "PROF_BUSY": 2
+      }
+    }
+  },
+  "unscheduledBySolver": {
+    "legacy": [
+      {
+        "name": "7",
+        "id": "S7",
+        "reason": "PROF_BUSY",
+        "supervisorId": "P19",
+        "observerId": "P16"
+      },
+      {
+        "name": "14",
+        "id": "S14",
+        "reason": "NO_COMMON_TIME",
+        "supervisorId": "P19",
+        "observerId": "P20"
+      },
+      {
+        "name": "42",
+        "id": "S42",
+        "reason": "NO_COMMON_TIME",
+        "supervisorId": "P32",
+        "observerId": "P35"
+      },
+      {
+        "name": "81",
+        "id": "S80",
+        "reason": "NO_COMMON_TIME",
+        "supervisorId": "P27",
+        "observerId": "P24"
+      },
+      {
+        "name": "84",
+        "id": "S83",
+        "reason": "NO_COMMON_TIME",
+        "supervisorId": "P17",
+        "observerId": "P31"
+      },
+      {
+        "name": "100",
+        "id": "S99",
+        "reason": "NO_COMMON_TIME",
+        "supervisorId": "P17",
+        "observerId": "P24"
+      },
+      {
+        "name": "116",
+        "id": "S115",
+        "reason": "NO_COMMON_TIME",
+        "supervisorId": "P24",
+        "observerId": "P31"
+      },
+      {
+        "name": "133",
+        "id": "S130",
+        "reason": "NO_COMMON_TIME",
+        "supervisorId": "P19",
+        "observerId": "P36"
+      },
+      {
+        "name": "138",
+        "id": "S132",
+        "reason": "PROF_BUSY",
+        "supervisorId": "P10",
+        "observerId": "P19"
+      }
+    ],
+    "pulp": [
+      {
+        "name": "5",
+        "id": "S5",
+        "reason": "PROF_BUSY",
+        "supervisorId": "P16",
+        "observerId": "P19"
+      },
+      {
+        "name": "7",
+        "id": "S7",
+        "reason": "PROF_BUSY",
+        "supervisorId": "P19",
+        "observerId": "P16"
+      },
+      {
+        "name": "14",
+        "id": "S14",
+        "reason": "NO_COMMON_TIME",
+        "supervisorId": "P19",
+        "observerId": "P20"
+      },
+      {
+        "name": "42",
+        "id": "S42",
+        "reason": "NO_COMMON_TIME",
+        "supervisorId": "P32",
+        "observerId": "P35"
+      },
+      {
+        "name": "81",
+        "id": "S80",
+        "reason": "NO_COMMON_TIME",
+        "supervisorId": "P27",
+        "observerId": "P24"
+      },
+      {
+        "name": "84",
+        "id": "S83",
+        "reason": "NO_COMMON_TIME",
+        "supervisorId": "P17",
+        "observerId": "P31"
+      },
+      {
+        "name": "100",
+        "id": "S99",
+        "reason": "NO_COMMON_TIME",
+        "supervisorId": "P17",
+        "observerId": "P24"
+      },
+      {
+        "name": "116",
+        "id": "S115",
+        "reason": "NO_COMMON_TIME",
+        "supervisorId": "P24",
+        "observerId": "P31"
+      },
+      {
+        "name": "133",
+        "id": "S130",
+        "reason": "NO_COMMON_TIME",
+        "supervisorId": "P19",
+        "observerId": "P36"
+      }
+    ],
+    "cpsat": [
+      {
+        "name": "5",
+        "id": "S5",
+        "reason": "PROF_BUSY",
+        "supervisorId": "P16",
+        "observerId": "P19"
+      },
+      {
+        "name": "7",
+        "id": "S7",
+        "reason": "PROF_BUSY",
+        "supervisorId": "P19",
+        "observerId": "P16"
+      },
+      {
+        "name": "14",
+        "id": "S14",
+        "reason": "NO_COMMON_TIME",
+        "supervisorId": "P19",
+        "observerId": "P20"
+      },
+      {
+        "name": "42",
+        "id": "S42",
+        "reason": "NO_COMMON_TIME",
+        "supervisorId": "P32",
+        "observerId": "P35"
+      },
+      {
+        "name": "81",
+        "id": "S80",
+        "reason": "NO_COMMON_TIME",
+        "supervisorId": "P27",
+        "observerId": "P24"
+      },
+      {
+        "name": "84",
+        "id": "S83",
+        "reason": "NO_COMMON_TIME",
+        "supervisorId": "P17",
+        "observerId": "P31"
+      },
+      {
+        "name": "100",
+        "id": "S99",
+        "reason": "NO_COMMON_TIME",
+        "supervisorId": "P17",
+        "observerId": "P24"
+      },
+      {
+        "name": "116",
+        "id": "S115",
+        "reason": "NO_COMMON_TIME",
+        "supervisorId": "P24",
+        "observerId": "P31"
+      },
+      {
+        "name": "133",
+        "id": "S130",
+        "reason": "NO_COMMON_TIME",
+        "supervisorId": "P19",
+        "observerId": "P36"
+      }
+    ]
+  },
+  "assignedSetDifferences": {
+    "legacyOnly": [
+      "5"
+    ],
+    "pulpOnly": [
+      "138"
+    ],
+    "cpsatOnlyVsLegacy": [
+      "138"
+    ],
+    "legacyOnlyVsCpsat": [
+      "5"
+    ]
+  },
+  "p19Bottleneck": {
+    "watchStudents": {
+      "5": {
+        "studentId": "S5",
+        "supervisorId": "P16",
+        "observerId": "P19",
+        "commonSlotIds": [
+          "AUTO_SLOT_004"
+        ],
+        "commonTimeLabels": [
+          "2026-04-10 11:30-12:15"
+        ]
+      },
+      "7": {
+        "studentId": "S7",
+        "supervisorId": "P19",
+        "observerId": "P16",
+        "commonSlotIds": [
+          "AUTO_SLOT_004"
+        ],
+        "commonTimeLabels": [
+          "2026-04-10 11:30-12:15"
+        ]
+      },
+      "138": {
+        "studentId": "S132",
+        "supervisorId": "P10",
+        "observerId": "P19",
+        "commonSlotIds": [
+          "AUTO_SLOT_004"
+        ],
+        "commonTimeLabels": [
+          "2026-04-10 11:30-12:15"
+        ]
+      }
+    },
+    "slot004Occupants": {
+      "legacy": [
+        {
+          "studentName": "5",
+          "studentId": "S5",
+          "roomName": "DLB646",
+          "timeLabel": "2026-04-10 11:30-12:15",
+          "supervisorId": "P16",
+          "observerId": "P19"
+        },
+        {
+          "studentName": "35",
+          "studentId": "S35",
+          "roomName": "RRS735",
+          "timeLabel": "2026-04-10 11:30-12:15",
+          "supervisorId": "P01",
+          "observerId": "P03"
+        },
+        {
+          "studentName": "153",
+          "studentId": "S147",
+          "roomName": "FSC801C/D",
+          "timeLabel": "2026-04-10 11:30-12:15",
+          "supervisorId": "P10",
+          "observerId": "P26"
+        },
+        {
+          "studentName": "168",
+          "studentId": "S162",
+          "roomName": "RRS732",
+          "timeLabel": "2026-04-10 11:30-12:15",
+          "supervisorId": "P34",
+          "observerId": "P25"
+        }
+      ],
+      "pulp": [
+        {
+          "studentName": "93",
+          "studentId": "S92",
+          "roomName": "DLB646",
+          "timeLabel": "2026-04-10 11:30-12:15",
+          "supervisorId": "P33",
+          "observerId": "P37"
+        },
+        {
+          "studentName": "138",
+          "studentId": "S132",
+          "roomName": "FSC801C/D",
+          "timeLabel": "2026-04-10 11:30-12:15",
+          "supervisorId": "P10",
+          "observerId": "P19"
+        }
+      ],
+      "cpsat": [
+        {
+          "studentName": "138",
+          "studentId": "S132",
+          "roomName": "FSC801C/D",
+          "timeLabel": "2026-04-10 11:30-12:15",
+          "supervisorId": "P10",
+          "observerId": "P19"
+        }
+      ]
+    },
+    "explanation": "Students 5 (P16/P19), 7 (P19/P16), and 138 (P10/P19) all depend on AUTO_SLOT_004 = 2026-04-10 11:30-12:15 as their only shared professor slot with P19. At most one of them can be assigned, so this bottleneck contributes two unavoidable PROF_BUSY-style misses among that trio whenever their domain is otherwise non-empty."
+  }
+}

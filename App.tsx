@@ -6,6 +6,7 @@ import FileUpload from './components/FileUpload';
 import ProfPreferenceInput from './components/ProfPreferenceInput';
 import ScheduleDashboard from './components/ScheduleDashboard';
 import { deriveSlots, parseStudents, parseRooms, parseAvailability, validateData } from './utils/csvHelper';
+import type { AvailabilityResolveStrategy } from './utils/csvHelper';
 import { generateSchedule, type SolverMode } from './utils/scheduler';
 import { Slot, RoomSlot, ScheduleResult, SolvingStatus, ValidationResult, ProfPreference } from './types';
 
@@ -14,6 +15,8 @@ interface AiAdviceResponse {
   analysis: string;
   suggestions?: string[];
 }
+
+const PROF_AVAILABILITY_RESOLVE_STRATEGY: AvailabilityResolveStrategy = 'overlap';
 
 const App: React.FC = () => {
   const [studentFile, setStudentFile] = useState<File | null>(null);
@@ -58,7 +61,9 @@ const App: React.FC = () => {
     setProfFile(file);
     if (file) {
       try {
-        const profsData = await parseAvailability(file);
+        const profsData = await parseAvailability(file, undefined, {
+          resolveStrategy: PROF_AVAILABILITY_RESOLVE_STRATEGY,
+        });
         const profIds = Object.keys(profsData).sort();
         setAvailableProfessors(profIds);
         setProfAvailability(profsData);
@@ -95,7 +100,9 @@ const App: React.FC = () => {
       }
 
       const roomsData = await parseRooms(roomFile, slotsData);
-      const profsData = await parseAvailability(profFile, slotsData);
+      const profsData = await parseAvailability(profFile, slotsData, {
+        resolveStrategy: PROF_AVAILABILITY_RESOLVE_STRATEGY,
+      });
       const studentsData = await parseStudents(studentFile);
 
       setProfAvailability(profsData);

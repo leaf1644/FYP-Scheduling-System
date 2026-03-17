@@ -1,0 +1,2453 @@
+{
+  "success": false,
+  "assignments": [
+    {
+      "student": {
+        "id": "S1",
+        "name": "1",
+        "supervisorId": "P16",
+        "observerId": "P20"
+      },
+      "roomSlot": {
+        "id": "RRS732::AUTO_SLOT_051",
+        "roomId": "RRS732",
+        "roomName": "RRS732",
+        "slotId": "AUTO_SLOT_051",
+        "timeLabel": "2026-04-16 14:35-15:20"
+      }
+    },
+    {
+      "student": {
+        "id": "S2",
+        "name": "2",
+        "supervisorId": "P20",
+        "observerId": "P16"
+      },
+      "roomSlot": {
+        "id": "RRS732::AUTO_SLOT_006",
+        "roomId": "RRS732",
+        "roomName": "RRS732",
+        "slotId": "AUTO_SLOT_006",
+        "timeLabel": "2026-04-10 14:35-15:20"
+      }
+    },
+    {
+      "student": {
+        "id": "S3",
+        "name": "3",
+        "supervisorId": "P38",
+        "observerId": "P16"
+      },
+      "roomSlot": {
+        "id": "RRS735::AUTO_SLOT_025",
+        "roomId": "RRS735",
+        "roomName": "RRS735",
+        "slotId": "AUTO_SLOT_025",
+        "timeLabel": "2026-04-13 15:30-16:15"
+      }
+    },
+    {
+      "student": {
+        "id": "S4",
+        "name": "4",
+        "supervisorId": "P16",
+        "observerId": "P38"
+      },
+      "roomSlot": {
+        "id": "DLB646::AUTO_SLOT_023",
+        "roomId": "DLB646",
+        "roomName": "DLB646",
+        "slotId": "AUTO_SLOT_023",
+        "timeLabel": "2026-04-13 13:45-14:30"
+      }
+    },
+    {
+      "student": {
+        "id": "S6",
+        "name": "6",
+        "supervisorId": "P16",
+        "observerId": "P13"
+      },
+      "roomSlot": {
+        "id": "FSC901E::AUTO_SLOT_007",
+        "roomId": "FSC901E",
+        "roomName": "FSC901E",
+        "slotId": "AUTO_SLOT_007",
+        "timeLabel": "2026-04-10 15:30-16:15"
+      }
+    },
+    {
+      "student": {
+        "id": "S8",
+        "name": "8",
+        "supervisorId": "P13",
+        "observerId": "P16"
+      },
+      "roomSlot": {
+        "id": "DLB637::AUTO_SLOT_031",
+        "roomId": "DLB637",
+        "roomName": "DLB637",
+        "slotId": "AUTO_SLOT_031",
+        "timeLabel": "2026-04-14 11:30-12:15"
+      }
+    },
+    {
+      "student": {
+        "id": "S9",
+        "name": "9",
+        "supervisorId": "P16",
+        "observerId": "P34"
+      },
+      "roomSlot": {
+        "id": "FSC901E::AUTO_SLOT_050",
+        "roomId": "FSC901E",
+        "roomName": "FSC901E",
+        "slotId": "AUTO_SLOT_050",
+        "timeLabel": "2026-04-16 13:45-14:30"
+      }
+    },
+    {
+      "student": {
+        "id": "S10",
+        "name": "10",
+        "supervisorId": "P34",
+        "observerId": "P16"
+      },
+      "roomSlot": {
+        "id": "DLB646::AUTO_SLOT_005",
+        "roomId": "DLB646",
+        "roomName": "DLB646",
+        "slotId": "AUTO_SLOT_005",
+        "timeLabel": "2026-04-10 13:45-14:30"
+      }
+    },
+    {
+      "student": {
+        "id": "S11",
+        "name": "11",
+        "supervisorId": "P22",
+        "observerId": "P20"
+      },
+      "roomSlot": {
+        "id": "FSC901C/D::AUTO_SLOT_042",
+        "roomId": "FSC901C/D",
+        "roomName": "FSC901C/D",
+        "slotId": "AUTO_SLOT_042",
+        "timeLabel": "2026-04-15 14:35-15:20"
+      }
+    },
+    {
+      "student": {
+        "id": "S12",
+        "name": "12",
+        "supervisorId": "P13",
+        "observerId": "P20"
+      },
+      "roomSlot": {
+        "id": "FSC901E::AUTO_SLOT_017",
+        "roomId": "FSC901E",
+        "roomName": "FSC901E",
+        "slotId": "AUTO_SLOT_017",
+        "timeLabel": "2026-04-11 16:20-17:05"
+      }
+    },
+    {
+      "student": {
+        "id": "S13",
+        "name": "13",
+        "supervisorId": "P16",
+        "observerId": "P15"
+      },
+      "roomSlot": {
+        "id": "DLB646::AUTO_SLOT_008",
+        "roomId": "DLB646",
+        "roomName": "DLB646",
+        "slotId": "AUTO_SLOT_008",
+        "timeLabel": "2026-04-10 16:20-17:05"
+      }
+    },
+    {
+      "student": {
+        "id": "S15",
+        "name": "15",
+        "supervisorId": "P20",
+        "observerId": "P13"
+      },
+      "roomSlot": {
+        "id": "FSC801C/D::AUTO_SLOT_018",
+        "roomId": "FSC801C/D",
+        "roomName": "FSC801C/D",
+        "slotId": "AUTO_SLOT_018",
+        "timeLabel": "2026-04-11 17:10-17:55"
+      }
+    },
+    {
+      "student": {
+        "id": "S16",
+        "name": "16",
+        "supervisorId": "P20",
+        "observerId": "P15"
+      },
+      "roomSlot": {
+        "id": "RRS735::AUTO_SLOT_027",
+        "roomId": "RRS735",
+        "roomName": "RRS735",
+        "slotId": "AUTO_SLOT_027",
+        "timeLabel": "2026-04-13 17:10-17:55"
+      }
+    },
+    {
+      "student": {
+        "id": "S17",
+        "name": "17",
+        "supervisorId": "P13",
+        "observerId": "P19"
+      },
+      "roomSlot": {
+        "id": "RRS732::AUTO_SLOT_003",
+        "roomId": "RRS732",
+        "roomName": "RRS732",
+        "slotId": "AUTO_SLOT_003",
+        "timeLabel": "2026-04-10 10:40-11:25"
+      }
+    },
+    {
+      "student": {
+        "id": "S18",
+        "name": "18",
+        "supervisorId": "P20",
+        "observerId": "P22"
+      },
+      "roomSlot": {
+        "id": "RRS732::AUTO_SLOT_050",
+        "roomId": "RRS732",
+        "roomName": "RRS732",
+        "slotId": "AUTO_SLOT_050",
+        "timeLabel": "2026-04-16 13:45-14:30"
+      }
+    },
+    {
+      "student": {
+        "id": "S19",
+        "name": "19",
+        "supervisorId": "P13",
+        "observerId": "P20"
+      },
+      "roomSlot": {
+        "id": "RRS732::AUTO_SLOT_016",
+        "roomId": "RRS732",
+        "roomName": "RRS732",
+        "slotId": "AUTO_SLOT_016",
+        "timeLabel": "2026-04-11 15:30-16:15"
+      }
+    },
+    {
+      "student": {
+        "id": "S20",
+        "name": "20",
+        "supervisorId": "P15",
+        "observerId": "P18"
+      },
+      "roomSlot": {
+        "id": "FSC801C/D::AUTO_SLOT_035",
+        "roomId": "FSC801C/D",
+        "roomName": "FSC801C/D",
+        "slotId": "AUTO_SLOT_035",
+        "timeLabel": "2026-04-14 16:20-17:05"
+      }
+    },
+    {
+      "student": {
+        "id": "S21",
+        "name": "21",
+        "supervisorId": "P20",
+        "observerId": "P13"
+      },
+      "roomSlot": {
+        "id": "FSC901E::AUTO_SLOT_013",
+        "roomId": "FSC901E",
+        "roomName": "FSC901E",
+        "slotId": "AUTO_SLOT_013",
+        "timeLabel": "2026-04-11 11:30-12:15"
+      }
+    },
+    {
+      "student": {
+        "id": "S22",
+        "name": "22",
+        "supervisorId": "P07",
+        "observerId": "P01"
+      },
+      "roomSlot": {
+        "id": "RRS732::AUTO_SLOT_054",
+        "roomId": "RRS732",
+        "roomName": "RRS732",
+        "slotId": "AUTO_SLOT_054",
+        "timeLabel": "2026-04-16 17:10-17:55"
+      }
+    },
+    {
+      "student": {
+        "id": "S23",
+        "name": "23",
+        "supervisorId": "P05",
+        "observerId": "P32"
+      },
+      "roomSlot": {
+        "id": "RRS732::AUTO_SLOT_021",
+        "roomId": "RRS732",
+        "roomName": "RRS732",
+        "slotId": "AUTO_SLOT_021",
+        "timeLabel": "2026-04-13 10:40-11:25"
+      }
+    },
+    {
+      "student": {
+        "id": "S24",
+        "name": "24",
+        "supervisorId": "P40",
+        "observerId": "P39"
+      },
+      "roomSlot": {
+        "id": "FSC901E::AUTO_SLOT_032",
+        "roomId": "FSC901E",
+        "roomName": "FSC901E",
+        "slotId": "AUTO_SLOT_032",
+        "timeLabel": "2026-04-14 13:45-14:30"
+      }
+    },
+    {
+      "student": {
+        "id": "S25",
+        "name": "25",
+        "supervisorId": "P07",
+        "observerId": "P03"
+      },
+      "roomSlot": {
+        "id": "FSC901E::AUTO_SLOT_053",
+        "roomId": "FSC901E",
+        "roomName": "FSC901E",
+        "slotId": "AUTO_SLOT_053",
+        "timeLabel": "2026-04-16 16:20-17:05"
+      }
+    },
+    {
+      "student": {
+        "id": "S26",
+        "name": "26",
+        "supervisorId": "P01",
+        "observerId": "P35"
+      },
+      "roomSlot": {
+        "id": "FSC901E::AUTO_SLOT_048",
+        "roomId": "FSC901E",
+        "roomName": "FSC901E",
+        "slotId": "AUTO_SLOT_048",
+        "timeLabel": "2026-04-16 10:40-11:25"
+      }
+    },
+    {
+      "student": {
+        "id": "S27",
+        "name": "27",
+        "supervisorId": "P01",
+        "observerId": "P39"
+      },
+      "roomSlot": {
+        "id": "RRS732::AUTO_SLOT_039",
+        "roomId": "RRS732",
+        "roomName": "RRS732",
+        "slotId": "AUTO_SLOT_039",
+        "timeLabel": "2026-04-15 10:40-11:25"
+      }
+    },
+    {
+      "student": {
+        "id": "S28",
+        "name": "28",
+        "supervisorId": "P06",
+        "observerId": "P04"
+      },
+      "roomSlot": {
+        "id": "FSC901E::AUTO_SLOT_019",
+        "roomId": "FSC901E",
+        "roomName": "FSC901E",
+        "slotId": "AUTO_SLOT_019",
+        "timeLabel": "2026-04-13 09:00-09:45"
+      }
+    },
+    {
+      "student": {
+        "id": "S29",
+        "name": "29",
+        "supervisorId": "P06",
+        "observerId": "P04"
+      },
+      "roomSlot": {
+        "id": "FSC801C/D::AUTO_SLOT_024",
+        "roomId": "FSC801C/D",
+        "roomName": "FSC801C/D",
+        "slotId": "AUTO_SLOT_024",
+        "timeLabel": "2026-04-13 14:35-15:20"
+      }
+    },
+    {
+      "student": {
+        "id": "S30",
+        "name": "30",
+        "supervisorId": "P08",
+        "observerId": "P07"
+      },
+      "roomSlot": {
+        "id": "DLB646::AUTO_SLOT_051",
+        "roomId": "DLB646",
+        "roomName": "DLB646",
+        "slotId": "AUTO_SLOT_051",
+        "timeLabel": "2026-04-16 14:35-15:20"
+      }
+    },
+    {
+      "student": {
+        "id": "S31",
+        "name": "31",
+        "supervisorId": "P06",
+        "observerId": "P32"
+      },
+      "roomSlot": {
+        "id": "FSC901E::AUTO_SLOT_052",
+        "roomId": "FSC901E",
+        "roomName": "FSC901E",
+        "slotId": "AUTO_SLOT_052",
+        "timeLabel": "2026-04-16 15:30-16:15"
+      }
+    },
+    {
+      "student": {
+        "id": "S32",
+        "name": "32",
+        "supervisorId": "P08",
+        "observerId": "P05"
+      },
+      "roomSlot": {
+        "id": "DLB646::AUTO_SLOT_019",
+        "roomId": "DLB646",
+        "roomName": "DLB646",
+        "slotId": "AUTO_SLOT_019",
+        "timeLabel": "2026-04-13 09:00-09:45"
+      }
+    },
+    {
+      "student": {
+        "id": "S33",
+        "name": "33",
+        "supervisorId": "P06",
+        "observerId": "P39"
+      },
+      "roomSlot": {
+        "id": "DLB646::AUTO_SLOT_046",
+        "roomId": "DLB646",
+        "roomName": "DLB646",
+        "slotId": "AUTO_SLOT_046",
+        "timeLabel": "2026-04-16 09:00-09:45"
+      }
+    },
+    {
+      "student": {
+        "id": "S34",
+        "name": "34",
+        "supervisorId": "P07",
+        "observerId": "P32"
+      },
+      "roomSlot": {
+        "id": "FSC901E::AUTO_SLOT_005",
+        "roomId": "FSC901E",
+        "roomName": "FSC901E",
+        "slotId": "AUTO_SLOT_005",
+        "timeLabel": "2026-04-10 13:45-14:30"
+      }
+    },
+    {
+      "student": {
+        "id": "S35",
+        "name": "35",
+        "supervisorId": "P01",
+        "observerId": "P03"
+      },
+      "roomSlot": {
+        "id": "DLB646::AUTO_SLOT_049",
+        "roomId": "DLB646",
+        "roomName": "DLB646",
+        "slotId": "AUTO_SLOT_049",
+        "timeLabel": "2026-04-16 11:30-12:15"
+      }
+    },
+    {
+      "student": {
+        "id": "S36",
+        "name": "36",
+        "supervisorId": "P40",
+        "observerId": "P32"
+      },
+      "roomSlot": {
+        "id": "RRS732::AUTO_SLOT_012",
+        "roomId": "RRS732",
+        "roomName": "RRS732",
+        "slotId": "AUTO_SLOT_012",
+        "timeLabel": "2026-04-11 10:40-11:25"
+      }
+    },
+    {
+      "student": {
+        "id": "S37",
+        "name": "37",
+        "supervisorId": "P04",
+        "observerId": "P06"
+      },
+      "roomSlot": {
+        "id": "DLB646::AUTO_SLOT_021",
+        "roomId": "DLB646",
+        "roomName": "DLB646",
+        "slotId": "AUTO_SLOT_021",
+        "timeLabel": "2026-04-13 10:40-11:25"
+      }
+    },
+    {
+      "student": {
+        "id": "S38",
+        "name": "38",
+        "supervisorId": "P07",
+        "observerId": "P08"
+      },
+      "roomSlot": {
+        "id": "FSC901E::AUTO_SLOT_049",
+        "roomId": "FSC901E",
+        "roomName": "FSC901E",
+        "slotId": "AUTO_SLOT_049",
+        "timeLabel": "2026-04-16 11:30-12:15"
+      }
+    },
+    {
+      "student": {
+        "id": "S39",
+        "name": "39",
+        "supervisorId": "P32",
+        "observerId": "P06"
+      },
+      "roomSlot": {
+        "id": "DLB646::AUTO_SLOT_054",
+        "roomId": "DLB646",
+        "roomName": "DLB646",
+        "slotId": "AUTO_SLOT_054",
+        "timeLabel": "2026-04-16 17:10-17:55"
+      }
+    },
+    {
+      "student": {
+        "id": "S40",
+        "name": "40",
+        "supervisorId": "P32",
+        "observerId": "P01"
+      },
+      "roomSlot": {
+        "id": "DLB646::AUTO_SLOT_031",
+        "roomId": "DLB646",
+        "roomName": "DLB646",
+        "slotId": "AUTO_SLOT_031",
+        "timeLabel": "2026-04-14 11:30-12:15"
+      }
+    },
+    {
+      "student": {
+        "id": "S41",
+        "name": "41",
+        "supervisorId": "P39",
+        "observerId": "P06"
+      },
+      "roomSlot": {
+        "id": "FSC901E::AUTO_SLOT_037",
+        "roomId": "FSC901E",
+        "roomName": "FSC901E",
+        "slotId": "AUTO_SLOT_037",
+        "timeLabel": "2026-04-15 09:00-09:45"
+      }
+    },
+    {
+      "student": {
+        "id": "S43",
+        "name": "43",
+        "supervisorId": "P39",
+        "observerId": "P08"
+      },
+      "roomSlot": {
+        "id": "DLB637::AUTO_SLOT_028",
+        "roomId": "DLB637",
+        "roomName": "DLB637",
+        "slotId": "AUTO_SLOT_028",
+        "timeLabel": "2026-04-14 09:00-09:45"
+      }
+    },
+    {
+      "student": {
+        "id": "S44",
+        "name": "44",
+        "supervisorId": "P03",
+        "observerId": "P05"
+      },
+      "roomSlot": {
+        "id": "FSC801C/D::AUTO_SLOT_020",
+        "roomId": "FSC801C/D",
+        "roomName": "FSC801C/D",
+        "slotId": "AUTO_SLOT_020",
+        "timeLabel": "2026-04-13 09:50-10:35"
+      }
+    },
+    {
+      "student": {
+        "id": "S45",
+        "name": "45",
+        "supervisorId": "P03",
+        "observerId": "P05"
+      },
+      "roomSlot": {
+        "id": "RRS735::AUTO_SLOT_033",
+        "roomId": "RRS735",
+        "roomName": "RRS735",
+        "slotId": "AUTO_SLOT_033",
+        "timeLabel": "2026-04-14 14:35-15:20"
+      }
+    },
+    {
+      "student": {
+        "id": "S46",
+        "name": "46",
+        "supervisorId": "P08",
+        "observerId": "P39"
+      },
+      "roomSlot": {
+        "id": "RRS638::AUTO_SLOT_036",
+        "roomId": "RRS638",
+        "roomName": "RRS638",
+        "slotId": "AUTO_SLOT_036",
+        "timeLabel": "2026-04-14 17:10-17:55"
+      }
+    },
+    {
+      "student": {
+        "id": "S47",
+        "name": "47",
+        "supervisorId": "P39",
+        "observerId": "P40"
+      },
+      "roomSlot": {
+        "id": "RRS732::AUTO_SLOT_033",
+        "roomId": "RRS732",
+        "roomName": "RRS732",
+        "slotId": "AUTO_SLOT_033",
+        "timeLabel": "2026-04-14 14:35-15:20"
+      }
+    },
+    {
+      "student": {
+        "id": "S48",
+        "name": "48",
+        "supervisorId": "P03",
+        "observerId": "P39"
+      },
+      "roomSlot": {
+        "id": "DLB637::AUTO_SLOT_050",
+        "roomId": "DLB637",
+        "roomName": "DLB637",
+        "slotId": "AUTO_SLOT_050",
+        "timeLabel": "2026-04-16 13:45-14:30"
+      }
+    },
+    {
+      "student": {
+        "id": "S49",
+        "name": "49",
+        "supervisorId": "P32",
+        "observerId": "P07"
+      },
+      "roomSlot": {
+        "id": "FSC901E::AUTO_SLOT_006",
+        "roomId": "FSC901E",
+        "roomName": "FSC901E",
+        "slotId": "AUTO_SLOT_006",
+        "timeLabel": "2026-04-10 14:35-15:20"
+      }
+    },
+    {
+      "student": {
+        "id": "S50",
+        "name": "50",
+        "supervisorId": "P01",
+        "observerId": "P02"
+      },
+      "roomSlot": {
+        "id": "RRS732::AUTO_SLOT_047",
+        "roomId": "RRS732",
+        "roomName": "RRS732",
+        "slotId": "AUTO_SLOT_047",
+        "timeLabel": "2026-04-16 09:50-10:35"
+      }
+    },
+    {
+      "student": {
+        "id": "S51",
+        "name": "51",
+        "supervisorId": "P39",
+        "observerId": "P40"
+      },
+      "roomSlot": {
+        "id": "RRS732::AUTO_SLOT_042",
+        "roomId": "RRS732",
+        "roomName": "RRS732",
+        "slotId": "AUTO_SLOT_042",
+        "timeLabel": "2026-04-15 14:35-15:20"
+      }
+    },
+    {
+      "student": {
+        "id": "S52",
+        "name": "52",
+        "supervisorId": "P35",
+        "observerId": "P01"
+      },
+      "roomSlot": {
+        "id": "FSC901E::AUTO_SLOT_025",
+        "roomId": "FSC901E",
+        "roomName": "FSC901E",
+        "slotId": "AUTO_SLOT_025",
+        "timeLabel": "2026-04-13 15:30-16:15"
+      }
+    },
+    {
+      "student": {
+        "id": "S53",
+        "name": "53",
+        "supervisorId": "P01",
+        "observerId": "P07"
+      },
+      "roomSlot": {
+        "id": "RRS732::AUTO_SLOT_009",
+        "roomId": "RRS732",
+        "roomName": "RRS732",
+        "slotId": "AUTO_SLOT_009",
+        "timeLabel": "2026-04-10 17:10-17:55"
+      }
+    },
+    {
+      "student": {
+        "id": "S54",
+        "name": "54",
+        "supervisorId": "P01",
+        "observerId": "P35"
+      },
+      "roomSlot": {
+        "id": "FSC901E::AUTO_SLOT_046",
+        "roomId": "FSC901E",
+        "roomName": "FSC901E",
+        "slotId": "AUTO_SLOT_046",
+        "timeLabel": "2026-04-16 09:00-09:45"
+      }
+    },
+    {
+      "student": {
+        "id": "S55",
+        "name": "55",
+        "supervisorId": "P32",
+        "observerId": "P08"
+      },
+      "roomSlot": {
+        "id": "DLB646::AUTO_SLOT_022",
+        "roomId": "DLB646",
+        "roomName": "DLB646",
+        "slotId": "AUTO_SLOT_022",
+        "timeLabel": "2026-04-13 11:30-12:15"
+      }
+    },
+    {
+      "student": {
+        "id": "S56",
+        "name": "56",
+        "supervisorId": "P03",
+        "observerId": "P32"
+      },
+      "roomSlot": {
+        "id": "RRS732::AUTO_SLOT_013",
+        "roomId": "RRS732",
+        "roomName": "RRS732",
+        "slotId": "AUTO_SLOT_013",
+        "timeLabel": "2026-04-11 11:30-12:15"
+      }
+    },
+    {
+      "student": {
+        "id": "S57",
+        "name": "57",
+        "supervisorId": "P32",
+        "observerId": "P03"
+      },
+      "roomSlot": {
+        "id": "FSC901C::AUTO_SLOT_010",
+        "roomId": "FSC901C",
+        "roomName": "FSC901C",
+        "slotId": "AUTO_SLOT_010",
+        "timeLabel": "2026-04-11 09:00-09:45"
+      }
+    },
+    {
+      "student": {
+        "id": "S58",
+        "name": "59",
+        "supervisorId": "P02",
+        "observerId": "P01"
+      },
+      "roomSlot": {
+        "id": "RRS735::AUTO_SLOT_003",
+        "roomId": "RRS735",
+        "roomName": "RRS735",
+        "slotId": "AUTO_SLOT_003",
+        "timeLabel": "2026-04-10 10:40-11:25"
+      }
+    },
+    {
+      "student": {
+        "id": "S59",
+        "name": "60",
+        "supervisorId": "P03",
+        "observerId": "P07"
+      },
+      "roomSlot": {
+        "id": "FSC901E::AUTO_SLOT_008",
+        "roomId": "FSC901E",
+        "roomName": "FSC901E",
+        "slotId": "AUTO_SLOT_008",
+        "timeLabel": "2026-04-10 16:20-17:05"
+      }
+    },
+    {
+      "student": {
+        "id": "S60",
+        "name": "61",
+        "supervisorId": "P39",
+        "observerId": "P06"
+      },
+      "roomSlot": {
+        "id": "RRS735::AUTO_SLOT_048",
+        "roomId": "RRS735",
+        "roomName": "RRS735",
+        "slotId": "AUTO_SLOT_048",
+        "timeLabel": "2026-04-16 10:40-11:25"
+      }
+    },
+    {
+      "student": {
+        "id": "S61",
+        "name": "62",
+        "supervisorId": "P04",
+        "observerId": "P03"
+      },
+      "roomSlot": {
+        "id": "FSC901E::AUTO_SLOT_011",
+        "roomId": "FSC901E",
+        "roomName": "FSC901E",
+        "slotId": "AUTO_SLOT_011",
+        "timeLabel": "2026-04-11 09:50-10:35"
+      }
+    },
+    {
+      "student": {
+        "id": "S62",
+        "name": "63",
+        "supervisorId": "P03",
+        "observerId": "P01"
+      },
+      "roomSlot": {
+        "id": "DLB637::AUTO_SLOT_019",
+        "roomId": "DLB637",
+        "roomName": "DLB637",
+        "slotId": "AUTO_SLOT_019",
+        "timeLabel": "2026-04-13 09:00-09:45"
+      }
+    },
+    {
+      "student": {
+        "id": "S63",
+        "name": "64",
+        "supervisorId": "P05",
+        "observerId": "P03"
+      },
+      "roomSlot": {
+        "id": "RRS732::AUTO_SLOT_022",
+        "roomId": "RRS732",
+        "roomName": "RRS732",
+        "slotId": "AUTO_SLOT_022",
+        "timeLabel": "2026-04-13 11:30-12:15"
+      }
+    },
+    {
+      "student": {
+        "id": "S64",
+        "name": "65",
+        "supervisorId": "P15",
+        "observerId": "P37"
+      },
+      "roomSlot": {
+        "id": "RRS638::AUTO_SLOT_013",
+        "roomId": "RRS638",
+        "roomName": "RRS638",
+        "slotId": "AUTO_SLOT_013",
+        "timeLabel": "2026-04-11 11:30-12:15"
+      }
+    },
+    {
+      "student": {
+        "id": "S65",
+        "name": "66",
+        "supervisorId": "P24",
+        "observerId": "P28"
+      },
+      "roomSlot": {
+        "id": "RRS735::AUTO_SLOT_046",
+        "roomId": "RRS735",
+        "roomName": "RRS735",
+        "slotId": "AUTO_SLOT_046",
+        "timeLabel": "2026-04-16 09:00-09:45"
+      }
+    },
+    {
+      "student": {
+        "id": "S66",
+        "name": "67",
+        "supervisorId": "P28",
+        "observerId": "P17"
+      },
+      "roomSlot": {
+        "id": "RRS638::AUTO_SLOT_034",
+        "roomId": "RRS638",
+        "roomName": "RRS638",
+        "slotId": "AUTO_SLOT_034",
+        "timeLabel": "2026-04-14 15:30-16:15"
+      }
+    },
+    {
+      "student": {
+        "id": "S67",
+        "name": "68",
+        "supervisorId": "P37",
+        "observerId": "P22"
+      },
+      "roomSlot": {
+        "id": "DLB646::AUTO_SLOT_052",
+        "roomId": "DLB646",
+        "roomName": "DLB646",
+        "slotId": "AUTO_SLOT_052",
+        "timeLabel": "2026-04-16 15:30-16:15"
+      }
+    },
+    {
+      "student": {
+        "id": "S68",
+        "name": "69",
+        "supervisorId": "P37",
+        "observerId": "P36"
+      },
+      "roomSlot": {
+        "id": "RRS638::AUTO_SLOT_011",
+        "roomId": "RRS638",
+        "roomName": "RRS638",
+        "slotId": "AUTO_SLOT_011",
+        "timeLabel": "2026-04-11 09:50-10:35"
+      }
+    },
+    {
+      "student": {
+        "id": "S69",
+        "name": "70",
+        "supervisorId": "P33",
+        "observerId": "P09"
+      },
+      "roomSlot": {
+        "id": "FSC901E::AUTO_SLOT_029",
+        "roomId": "FSC901E",
+        "roomName": "FSC901E",
+        "slotId": "AUTO_SLOT_029",
+        "timeLabel": "2026-04-14 09:50-10:35"
+      }
+    },
+    {
+      "student": {
+        "id": "S70",
+        "name": "71",
+        "supervisorId": "P12",
+        "observerId": "P28"
+      },
+      "roomSlot": {
+        "id": "RRS638::AUTO_SLOT_020",
+        "roomId": "RRS638",
+        "roomName": "RRS638",
+        "slotId": "AUTO_SLOT_020",
+        "timeLabel": "2026-04-13 09:50-10:35"
+      }
+    },
+    {
+      "student": {
+        "id": "S71",
+        "name": "72",
+        "supervisorId": "P27",
+        "observerId": "P36"
+      },
+      "roomSlot": {
+        "id": "FSC901E::AUTO_SLOT_026",
+        "roomId": "FSC901E",
+        "roomName": "FSC901E",
+        "slotId": "AUTO_SLOT_026",
+        "timeLabel": "2026-04-13 16:20-17:05"
+      }
+    },
+    {
+      "student": {
+        "id": "S72",
+        "name": "73",
+        "supervisorId": "P22",
+        "observerId": "P14"
+      },
+      "roomSlot": {
+        "id": "DLB646::AUTO_SLOT_040",
+        "roomId": "DLB646",
+        "roomName": "DLB646",
+        "slotId": "AUTO_SLOT_040",
+        "timeLabel": "2026-04-15 11:30-12:15"
+      }
+    },
+    {
+      "student": {
+        "id": "S73",
+        "name": "74",
+        "supervisorId": "P21",
+        "observerId": "P15"
+      },
+      "roomSlot": {
+        "id": "FSC901E::AUTO_SLOT_034",
+        "roomId": "FSC901E",
+        "roomName": "FSC901E",
+        "slotId": "AUTO_SLOT_034",
+        "timeLabel": "2026-04-14 15:30-16:15"
+      }
+    },
+    {
+      "student": {
+        "id": "S74",
+        "name": "75",
+        "supervisorId": "P27",
+        "observerId": "P15"
+      },
+      "roomSlot": {
+        "id": "RRS732::AUTO_SLOT_001",
+        "roomId": "RRS732",
+        "roomName": "RRS732",
+        "slotId": "AUTO_SLOT_001",
+        "timeLabel": "2026-04-10 09:00-09:45"
+      }
+    },
+    {
+      "student": {
+        "id": "S75",
+        "name": "76",
+        "supervisorId": "P28",
+        "observerId": "P37"
+      },
+      "roomSlot": {
+        "id": "DLB646::AUTO_SLOT_047",
+        "roomId": "DLB646",
+        "roomName": "DLB646",
+        "slotId": "AUTO_SLOT_047",
+        "timeLabel": "2026-04-16 09:50-10:35"
+      }
+    },
+    {
+      "student": {
+        "id": "S76",
+        "name": "77",
+        "supervisorId": "P36",
+        "observerId": "P37"
+      },
+      "roomSlot": {
+        "id": "RRS638::AUTO_SLOT_010",
+        "roomId": "RRS638",
+        "roomName": "RRS638",
+        "slotId": "AUTO_SLOT_010",
+        "timeLabel": "2026-04-11 09:00-09:45"
+      }
+    },
+    {
+      "student": {
+        "id": "S77",
+        "name": "78",
+        "supervisorId": "P27",
+        "observerId": "P22"
+      },
+      "roomSlot": {
+        "id": "RRS732::AUTO_SLOT_036",
+        "roomId": "RRS732",
+        "roomName": "RRS732",
+        "slotId": "AUTO_SLOT_036",
+        "timeLabel": "2026-04-14 17:10-17:55"
+      }
+    },
+    {
+      "student": {
+        "id": "S78",
+        "name": "79",
+        "supervisorId": "P37",
+        "observerId": "P28"
+      },
+      "roomSlot": {
+        "id": "RRS732::AUTO_SLOT_024",
+        "roomId": "RRS732",
+        "roomName": "RRS732",
+        "slotId": "AUTO_SLOT_024",
+        "timeLabel": "2026-04-13 14:35-15:20"
+      }
+    },
+    {
+      "student": {
+        "id": "S79",
+        "name": "80",
+        "supervisorId": "P17",
+        "observerId": "P36"
+      },
+      "roomSlot": {
+        "id": "RRS732::AUTO_SLOT_030",
+        "roomId": "RRS732",
+        "roomName": "RRS732",
+        "slotId": "AUTO_SLOT_030",
+        "timeLabel": "2026-04-14 10:40-11:25"
+      }
+    },
+    {
+      "student": {
+        "id": "S81",
+        "name": "82",
+        "supervisorId": "P34",
+        "observerId": "P14"
+      },
+      "roomSlot": {
+        "id": "RRS732::AUTO_SLOT_041",
+        "roomId": "RRS732",
+        "roomName": "RRS732",
+        "slotId": "AUTO_SLOT_041",
+        "timeLabel": "2026-04-15 13:45-14:30"
+      }
+    },
+    {
+      "student": {
+        "id": "S82",
+        "name": "83",
+        "supervisorId": "P36",
+        "observerId": "P27"
+      },
+      "roomSlot": {
+        "id": "FSC801C/D::AUTO_SLOT_033",
+        "roomId": "FSC801C/D",
+        "roomName": "FSC801C/D",
+        "slotId": "AUTO_SLOT_033",
+        "timeLabel": "2026-04-14 14:35-15:20"
+      }
+    },
+    {
+      "student": {
+        "id": "S84",
+        "name": "85",
+        "supervisorId": "P22",
+        "observerId": "P27"
+      },
+      "roomSlot": {
+        "id": "DLB646::AUTO_SLOT_035",
+        "roomId": "DLB646",
+        "roomName": "DLB646",
+        "slotId": "AUTO_SLOT_035",
+        "timeLabel": "2026-04-14 16:20-17:05"
+      }
+    },
+    {
+      "student": {
+        "id": "S85",
+        "name": "86",
+        "supervisorId": "P18",
+        "observerId": "P22"
+      },
+      "roomSlot": {
+        "id": "DLB646::AUTO_SLOT_034",
+        "roomId": "DLB646",
+        "roomName": "DLB646",
+        "slotId": "AUTO_SLOT_034",
+        "timeLabel": "2026-04-14 15:30-16:15"
+      }
+    },
+    {
+      "student": {
+        "id": "S86",
+        "name": "87",
+        "supervisorId": "P22",
+        "observerId": "P18"
+      },
+      "roomSlot": {
+        "id": "FSC901C/D::AUTO_SLOT_051",
+        "roomId": "FSC901C/D",
+        "roomName": "FSC901C/D",
+        "slotId": "AUTO_SLOT_051",
+        "timeLabel": "2026-04-16 14:35-15:20"
+      }
+    },
+    {
+      "student": {
+        "id": "S87",
+        "name": "88",
+        "supervisorId": "P15",
+        "observerId": "P09"
+      },
+      "roomSlot": {
+        "id": "FSC901C::AUTO_SLOT_015",
+        "roomId": "FSC901C",
+        "roomName": "FSC901C",
+        "slotId": "AUTO_SLOT_015",
+        "timeLabel": "2026-04-11 14:35-15:20"
+      }
+    },
+    {
+      "student": {
+        "id": "S88",
+        "name": "89",
+        "supervisorId": "P09",
+        "observerId": "P33"
+      },
+      "roomSlot": {
+        "id": "FSC901E::AUTO_SLOT_030",
+        "roomId": "FSC901E",
+        "roomName": "FSC901E",
+        "slotId": "AUTO_SLOT_030",
+        "timeLabel": "2026-04-14 10:40-11:25"
+      }
+    },
+    {
+      "student": {
+        "id": "S89",
+        "name": "90",
+        "supervisorId": "P28",
+        "observerId": "P30"
+      },
+      "roomSlot": {
+        "id": "DLB637::AUTO_SLOT_051",
+        "roomId": "DLB637",
+        "roomName": "DLB637",
+        "slotId": "AUTO_SLOT_051",
+        "timeLabel": "2026-04-16 14:35-15:20"
+      }
+    },
+    {
+      "student": {
+        "id": "S90",
+        "name": "91",
+        "supervisorId": "P09",
+        "observerId": "P31"
+      },
+      "roomSlot": {
+        "id": "FSC901E::AUTO_SLOT_014",
+        "roomId": "FSC901E",
+        "roomName": "FSC901E",
+        "slotId": "AUTO_SLOT_014",
+        "timeLabel": "2026-04-11 13:45-14:30"
+      }
+    },
+    {
+      "student": {
+        "id": "S91",
+        "name": "92",
+        "supervisorId": "P15",
+        "observerId": "P17"
+      },
+      "roomSlot": {
+        "id": "DLB637::AUTO_SLOT_032",
+        "roomId": "DLB637",
+        "roomName": "DLB637",
+        "slotId": "AUTO_SLOT_032",
+        "timeLabel": "2026-04-14 13:45-14:30"
+      }
+    },
+    {
+      "student": {
+        "id": "S92",
+        "name": "93",
+        "supervisorId": "P33",
+        "observerId": "P37"
+      },
+      "roomSlot": {
+        "id": "DLB646::AUTO_SLOT_004",
+        "roomId": "DLB646",
+        "roomName": "DLB646",
+        "slotId": "AUTO_SLOT_004",
+        "timeLabel": "2026-04-10 11:30-12:15"
+      }
+    },
+    {
+      "student": {
+        "id": "S93",
+        "name": "94",
+        "supervisorId": "P09",
+        "observerId": "P33"
+      },
+      "roomSlot": {
+        "id": "FSC901E::AUTO_SLOT_042",
+        "roomId": "FSC901E",
+        "roomName": "FSC901E",
+        "slotId": "AUTO_SLOT_042",
+        "timeLabel": "2026-04-15 14:35-15:20"
+      }
+    },
+    {
+      "student": {
+        "id": "S94",
+        "name": "95",
+        "supervisorId": "P17",
+        "observerId": "P28"
+      },
+      "roomSlot": {
+        "id": "RRS638::AUTO_SLOT_033",
+        "roomId": "RRS638",
+        "roomName": "RRS638",
+        "slotId": "AUTO_SLOT_033",
+        "timeLabel": "2026-04-14 14:35-15:20"
+      }
+    },
+    {
+      "student": {
+        "id": "S95",
+        "name": "96",
+        "supervisorId": "P18",
+        "observerId": "P24"
+      },
+      "roomSlot": {
+        "id": "DLB646::AUTO_SLOT_042",
+        "roomId": "DLB646",
+        "roomName": "DLB646",
+        "slotId": "AUTO_SLOT_042",
+        "timeLabel": "2026-04-15 14:35-15:20"
+      }
+    },
+    {
+      "student": {
+        "id": "S96",
+        "name": "97",
+        "supervisorId": "P14",
+        "observerId": "P34"
+      },
+      "roomSlot": {
+        "id": "DLB646::AUTO_SLOT_025",
+        "roomId": "DLB646",
+        "roomName": "DLB646",
+        "slotId": "AUTO_SLOT_025",
+        "timeLabel": "2026-04-13 15:30-16:15"
+      }
+    },
+    {
+      "student": {
+        "id": "S97",
+        "name": "98",
+        "supervisorId": "P33",
+        "observerId": "P18"
+      },
+      "roomSlot": {
+        "id": "DLB646::AUTO_SLOT_050",
+        "roomId": "DLB646",
+        "roomName": "DLB646",
+        "slotId": "AUTO_SLOT_050",
+        "timeLabel": "2026-04-16 13:45-14:30"
+      }
+    },
+    {
+      "student": {
+        "id": "S98",
+        "name": "99",
+        "supervisorId": "P24",
+        "observerId": "P18"
+      },
+      "roomSlot": {
+        "id": "DLB646::AUTO_SLOT_041",
+        "roomId": "DLB646",
+        "roomName": "DLB646",
+        "slotId": "AUTO_SLOT_041",
+        "timeLabel": "2026-04-15 13:45-14:30"
+      }
+    },
+    {
+      "student": {
+        "id": "S100",
+        "name": "101",
+        "supervisorId": "P27",
+        "observerId": "P33"
+      },
+      "roomSlot": {
+        "id": "RRS732::AUTO_SLOT_027",
+        "roomId": "RRS732",
+        "roomName": "RRS732",
+        "slotId": "AUTO_SLOT_027",
+        "timeLabel": "2026-04-13 17:10-17:55"
+      }
+    },
+    {
+      "student": {
+        "id": "S101",
+        "name": "102",
+        "supervisorId": "P28",
+        "observerId": "P24"
+      },
+      "roomSlot": {
+        "id": "DLB646::AUTO_SLOT_037",
+        "roomId": "DLB646",
+        "roomName": "DLB646",
+        "slotId": "AUTO_SLOT_037",
+        "timeLabel": "2026-04-15 09:00-09:45"
+      }
+    },
+    {
+      "student": {
+        "id": "S102",
+        "name": "103",
+        "supervisorId": "P14",
+        "observerId": "P30"
+      },
+      "roomSlot": {
+        "id": "RRS735::AUTO_SLOT_034",
+        "roomId": "RRS735",
+        "roomName": "RRS735",
+        "slotId": "AUTO_SLOT_034",
+        "timeLabel": "2026-04-14 15:30-16:15"
+      }
+    },
+    {
+      "student": {
+        "id": "S103",
+        "name": "104",
+        "supervisorId": "P31",
+        "observerId": "P15"
+      },
+      "roomSlot": {
+        "id": "RRS732::AUTO_SLOT_018",
+        "roomId": "RRS732",
+        "roomName": "RRS732",
+        "slotId": "AUTO_SLOT_018",
+        "timeLabel": "2026-04-11 17:10-17:55"
+      }
+    },
+    {
+      "student": {
+        "id": "S104",
+        "name": "105",
+        "supervisorId": "P21",
+        "observerId": "P18"
+      },
+      "roomSlot": {
+        "id": "RRS638::AUTO_SLOT_005",
+        "roomId": "RRS638",
+        "roomName": "RRS638",
+        "slotId": "AUTO_SLOT_005",
+        "timeLabel": "2026-04-10 13:45-14:30"
+      }
+    },
+    {
+      "student": {
+        "id": "S105",
+        "name": "106",
+        "supervisorId": "P36",
+        "observerId": "P17"
+      },
+      "roomSlot": {
+        "id": "FSC901E::AUTO_SLOT_036",
+        "roomId": "FSC901E",
+        "roomName": "FSC901E",
+        "slotId": "AUTO_SLOT_036",
+        "timeLabel": "2026-04-14 17:10-17:55"
+      }
+    },
+    {
+      "student": {
+        "id": "S106",
+        "name": "107",
+        "supervisorId": "P21",
+        "observerId": "P27"
+      },
+      "roomSlot": {
+        "id": "RRS735::AUTO_SLOT_007",
+        "roomId": "RRS735",
+        "roomName": "RRS735",
+        "slotId": "AUTO_SLOT_007",
+        "timeLabel": "2026-04-10 15:30-16:15"
+      }
+    },
+    {
+      "student": {
+        "id": "S107",
+        "name": "108",
+        "supervisorId": "P27",
+        "observerId": "P21"
+      },
+      "roomSlot": {
+        "id": "DLB646::AUTO_SLOT_020",
+        "roomId": "DLB646",
+        "roomName": "DLB646",
+        "slotId": "AUTO_SLOT_020",
+        "timeLabel": "2026-04-13 09:50-10:35"
+      }
+    },
+    {
+      "student": {
+        "id": "S108",
+        "name": "109",
+        "supervisorId": "P37",
+        "observerId": "P27"
+      },
+      "roomSlot": {
+        "id": "RRS735::AUTO_SLOT_031",
+        "roomId": "RRS735",
+        "roomName": "RRS735",
+        "slotId": "AUTO_SLOT_031",
+        "timeLabel": "2026-04-14 11:30-12:15"
+      }
+    },
+    {
+      "student": {
+        "id": "S109",
+        "name": "110",
+        "supervisorId": "P28",
+        "observerId": "P12"
+      },
+      "roomSlot": {
+        "id": "RRS638::AUTO_SLOT_019",
+        "roomId": "RRS638",
+        "roomName": "RRS638",
+        "slotId": "AUTO_SLOT_019",
+        "timeLabel": "2026-04-13 09:00-09:45"
+      }
+    },
+    {
+      "student": {
+        "id": "S110",
+        "name": "111",
+        "supervisorId": "P18",
+        "observerId": "P15"
+      },
+      "roomSlot": {
+        "id": "FSC901C/D::AUTO_SLOT_007",
+        "roomId": "FSC901C/D",
+        "roomName": "FSC901C/D",
+        "slotId": "AUTO_SLOT_007",
+        "timeLabel": "2026-04-10 15:30-16:15"
+      }
+    },
+    {
+      "student": {
+        "id": "S111",
+        "name": "112",
+        "supervisorId": "P18",
+        "observerId": "P09"
+      },
+      "roomSlot": {
+        "id": "FSC901C/D::AUTO_SLOT_026",
+        "roomId": "FSC901C/D",
+        "roomName": "FSC901C/D",
+        "slotId": "AUTO_SLOT_026",
+        "timeLabel": "2026-04-13 16:20-17:05"
+      }
+    },
+    {
+      "student": {
+        "id": "S112",
+        "name": "113",
+        "supervisorId": "P33",
+        "observerId": "P17"
+      },
+      "roomSlot": {
+        "id": "DLB646::AUTO_SLOT_028",
+        "roomId": "DLB646",
+        "roomName": "DLB646",
+        "slotId": "AUTO_SLOT_028",
+        "timeLabel": "2026-04-14 09:00-09:45"
+      }
+    },
+    {
+      "student": {
+        "id": "S113",
+        "name": "114",
+        "supervisorId": "P15",
+        "observerId": "P28"
+      },
+      "roomSlot": {
+        "id": "RRS735::AUTO_SLOT_036",
+        "roomId": "RRS735",
+        "roomName": "RRS735",
+        "slotId": "AUTO_SLOT_036",
+        "timeLabel": "2026-04-14 17:10-17:55"
+      }
+    },
+    {
+      "student": {
+        "id": "S114",
+        "name": "115",
+        "supervisorId": "P09",
+        "observerId": "P15"
+      },
+      "roomSlot": {
+        "id": "RRS732::AUTO_SLOT_010",
+        "roomId": "RRS732",
+        "roomName": "RRS732",
+        "slotId": "AUTO_SLOT_010",
+        "timeLabel": "2026-04-11 09:00-09:45"
+      }
+    },
+    {
+      "student": {
+        "id": "S116",
+        "name": "117",
+        "supervisorId": "P09",
+        "observerId": "P33"
+      },
+      "roomSlot": {
+        "id": "RRS732::AUTO_SLOT_038",
+        "roomId": "RRS732",
+        "roomName": "RRS732",
+        "slotId": "AUTO_SLOT_038",
+        "timeLabel": "2026-04-15 09:50-10:35"
+      }
+    },
+    {
+      "student": {
+        "id": "S117",
+        "name": "118",
+        "supervisorId": "P30",
+        "observerId": "P14"
+      },
+      "roomSlot": {
+        "id": "DLB646::AUTO_SLOT_026",
+        "roomId": "DLB646",
+        "roomName": "DLB646",
+        "slotId": "AUTO_SLOT_026",
+        "timeLabel": "2026-04-13 16:20-17:05"
+      }
+    },
+    {
+      "student": {
+        "id": "S118",
+        "name": "119",
+        "supervisorId": "P17",
+        "observerId": "P21"
+      },
+      "roomSlot": {
+        "id": "FSC901C/D::AUTO_SLOT_008",
+        "roomId": "FSC901C/D",
+        "roomName": "FSC901C/D",
+        "slotId": "AUTO_SLOT_008",
+        "timeLabel": "2026-04-10 16:20-17:05"
+      }
+    },
+    {
+      "student": {
+        "id": "S119",
+        "name": "120",
+        "supervisorId": "P31",
+        "observerId": "P18"
+      },
+      "roomSlot": {
+        "id": "FSC901E::AUTO_SLOT_027",
+        "roomId": "FSC901E",
+        "roomName": "FSC901E",
+        "slotId": "AUTO_SLOT_027",
+        "timeLabel": "2026-04-13 17:10-17:55"
+      }
+    },
+    {
+      "student": {
+        "id": "S120",
+        "name": "121",
+        "supervisorId": "P22",
+        "observerId": "P28"
+      },
+      "roomSlot": {
+        "id": "DLB646::AUTO_SLOT_032",
+        "roomId": "DLB646",
+        "roomName": "DLB646",
+        "slotId": "AUTO_SLOT_032",
+        "timeLabel": "2026-04-14 13:45-14:30"
+      }
+    },
+    {
+      "student": {
+        "id": "S121",
+        "name": "122",
+        "supervisorId": "P14",
+        "observerId": "P30"
+      },
+      "roomSlot": {
+        "id": "RRS732::AUTO_SLOT_045",
+        "roomId": "RRS732",
+        "roomName": "RRS732",
+        "slotId": "AUTO_SLOT_045",
+        "timeLabel": "2026-04-15 17:10-17:55"
+      }
+    },
+    {
+      "student": {
+        "id": "S122",
+        "name": "123",
+        "supervisorId": "P33",
+        "observerId": "P31"
+      },
+      "roomSlot": {
+        "id": "DLB637::AUTO_SLOT_023",
+        "roomId": "DLB637",
+        "roomName": "DLB637",
+        "slotId": "AUTO_SLOT_023",
+        "timeLabel": "2026-04-13 13:45-14:30"
+      }
+    },
+    {
+      "student": {
+        "id": "S123",
+        "name": "124",
+        "supervisorId": "P31",
+        "observerId": "P33"
+      },
+      "roomSlot": {
+        "id": "FSC801C/D::AUTO_SLOT_025",
+        "roomId": "FSC801C/D",
+        "roomName": "FSC801C/D",
+        "slotId": "AUTO_SLOT_025",
+        "timeLabel": "2026-04-13 15:30-16:15"
+      }
+    },
+    {
+      "student": {
+        "id": "S124",
+        "name": "125",
+        "supervisorId": "P21",
+        "observerId": "P17"
+      },
+      "roomSlot": {
+        "id": "RRS735::AUTO_SLOT_009",
+        "roomId": "RRS735",
+        "roomName": "RRS735",
+        "slotId": "AUTO_SLOT_009",
+        "timeLabel": "2026-04-10 17:10-17:55"
+      }
+    },
+    {
+      "student": {
+        "id": "S125",
+        "name": "126",
+        "supervisorId": "P15",
+        "observerId": "P21"
+      },
+      "roomSlot": {
+        "id": "FSC901D::AUTO_SLOT_014",
+        "roomId": "FSC901D",
+        "roomName": "FSC901D",
+        "slotId": "AUTO_SLOT_014",
+        "timeLabel": "2026-04-11 13:45-14:30"
+      }
+    },
+    {
+      "student": {
+        "id": "S126",
+        "name": "127",
+        "supervisorId": "P15",
+        "observerId": "P31"
+      },
+      "roomSlot": {
+        "id": "FSC801C/D::AUTO_SLOT_011",
+        "roomId": "FSC801C/D",
+        "roomName": "FSC801C/D",
+        "slotId": "AUTO_SLOT_011",
+        "timeLabel": "2026-04-11 09:50-10:35"
+      }
+    },
+    {
+      "student": {
+        "id": "S127",
+        "name": "128",
+        "supervisorId": "P31",
+        "observerId": "P09"
+      },
+      "roomSlot": {
+        "id": "FSC801C/D::AUTO_SLOT_012",
+        "roomId": "FSC801C/D",
+        "roomName": "FSC801C/D",
+        "slotId": "AUTO_SLOT_012",
+        "timeLabel": "2026-04-11 10:40-11:25"
+      }
+    },
+    {
+      "student": {
+        "id": "S128",
+        "name": "129",
+        "supervisorId": "P31",
+        "observerId": "P27"
+      },
+      "roomSlot": {
+        "id": "FSC801C/D::AUTO_SLOT_019",
+        "roomId": "FSC801C/D",
+        "roomName": "FSC801C/D",
+        "slotId": "AUTO_SLOT_019",
+        "timeLabel": "2026-04-13 09:00-09:45"
+      }
+    },
+    {
+      "student": {
+        "id": "S129",
+        "name": "130",
+        "supervisorId": "P18",
+        "observerId": "P27"
+      },
+      "roomSlot": {
+        "id": "FSC901C/D::AUTO_SLOT_009",
+        "roomId": "FSC901C/D",
+        "roomName": "FSC901C/D",
+        "slotId": "AUTO_SLOT_009",
+        "timeLabel": "2026-04-10 17:10-17:55"
+      }
+    },
+    {
+      "student": {
+        "id": "S131",
+        "name": "135",
+        "supervisorId": "P19",
+        "observerId": "P12"
+      },
+      "roomSlot": {
+        "id": "RRS735::AUTO_SLOT_001",
+        "roomId": "RRS735",
+        "roomName": "RRS735",
+        "slotId": "AUTO_SLOT_001",
+        "timeLabel": "2026-04-10 09:00-09:45"
+      }
+    },
+    {
+      "student": {
+        "id": "S132",
+        "name": "138",
+        "supervisorId": "P10",
+        "observerId": "P19"
+      },
+      "roomSlot": {
+        "id": "FSC801C/D::AUTO_SLOT_004",
+        "roomId": "FSC801C/D",
+        "roomName": "FSC801C/D",
+        "slotId": "AUTO_SLOT_004",
+        "timeLabel": "2026-04-10 11:30-12:15"
+      }
+    },
+    {
+      "student": {
+        "id": "S133",
+        "name": "139",
+        "supervisorId": "P26",
+        "observerId": "P11"
+      },
+      "roomSlot": {
+        "id": "RRS735::AUTO_SLOT_042",
+        "roomId": "RRS735",
+        "roomName": "RRS735",
+        "slotId": "AUTO_SLOT_042",
+        "timeLabel": "2026-04-15 14:35-15:20"
+      }
+    },
+    {
+      "student": {
+        "id": "S134",
+        "name": "140",
+        "supervisorId": "P11",
+        "observerId": "P26"
+      },
+      "roomSlot": {
+        "id": "FSC901E::AUTO_SLOT_024",
+        "roomId": "FSC901E",
+        "roomName": "FSC901E",
+        "slotId": "AUTO_SLOT_024",
+        "timeLabel": "2026-04-13 14:35-15:20"
+      }
+    },
+    {
+      "student": {
+        "id": "S135",
+        "name": "141",
+        "supervisorId": "P11",
+        "observerId": "P38"
+      },
+      "roomSlot": {
+        "id": "FSC801C/D::AUTO_SLOT_034",
+        "roomId": "FSC801C/D",
+        "roomName": "FSC801C/D",
+        "slotId": "AUTO_SLOT_034",
+        "timeLabel": "2026-04-14 15:30-16:15"
+      }
+    },
+    {
+      "student": {
+        "id": "S136",
+        "name": "142",
+        "supervisorId": "P11",
+        "observerId": "P25"
+      },
+      "roomSlot": {
+        "id": "FSC901E::AUTO_SLOT_016",
+        "roomId": "FSC901E",
+        "roomName": "FSC901E",
+        "slotId": "AUTO_SLOT_016",
+        "timeLabel": "2026-04-11 15:30-16:15"
+      }
+    },
+    {
+      "student": {
+        "id": "S137",
+        "name": "143",
+        "supervisorId": "P38",
+        "observerId": "P11"
+      },
+      "roomSlot": {
+        "id": "RRS735::AUTO_SLOT_045",
+        "roomId": "RRS735",
+        "roomName": "RRS735",
+        "slotId": "AUTO_SLOT_045",
+        "timeLabel": "2026-04-15 17:10-17:55"
+      }
+    },
+    {
+      "student": {
+        "id": "S138",
+        "name": "144",
+        "supervisorId": "P10",
+        "observerId": "P11"
+      },
+      "roomSlot": {
+        "id": "RRS732::AUTO_SLOT_044",
+        "roomId": "RRS732",
+        "roomName": "RRS732",
+        "slotId": "AUTO_SLOT_044",
+        "timeLabel": "2026-04-15 16:20-17:05"
+      }
+    },
+    {
+      "student": {
+        "id": "S139",
+        "name": "145",
+        "supervisorId": "P26",
+        "observerId": "P25"
+      },
+      "roomSlot": {
+        "id": "RRS735::AUTO_SLOT_037",
+        "roomId": "RRS735",
+        "roomName": "RRS735",
+        "slotId": "AUTO_SLOT_037",
+        "timeLabel": "2026-04-15 09:00-09:45"
+      }
+    },
+    {
+      "student": {
+        "id": "S140",
+        "name": "146",
+        "supervisorId": "P25",
+        "observerId": "P11"
+      },
+      "roomSlot": {
+        "id": "FSC801C/D::AUTO_SLOT_013",
+        "roomId": "FSC801C/D",
+        "roomName": "FSC801C/D",
+        "slotId": "AUTO_SLOT_013",
+        "timeLabel": "2026-04-11 11:30-12:15"
+      }
+    },
+    {
+      "student": {
+        "id": "S141",
+        "name": "147",
+        "supervisorId": "P11",
+        "observerId": "P29"
+      },
+      "roomSlot": {
+        "id": "RRS732::AUTO_SLOT_014",
+        "roomId": "RRS732",
+        "roomName": "RRS732",
+        "slotId": "AUTO_SLOT_014",
+        "timeLabel": "2026-04-11 13:45-14:30"
+      }
+    },
+    {
+      "student": {
+        "id": "S142",
+        "name": "148",
+        "supervisorId": "P38",
+        "observerId": "P26"
+      },
+      "roomSlot": {
+        "id": "FSC901E::AUTO_SLOT_020",
+        "roomId": "FSC901E",
+        "roomName": "FSC901E",
+        "slotId": "AUTO_SLOT_020",
+        "timeLabel": "2026-04-13 09:50-10:35"
+      }
+    },
+    {
+      "student": {
+        "id": "S143",
+        "name": "149",
+        "supervisorId": "P29",
+        "observerId": "P11"
+      },
+      "roomSlot": {
+        "id": "RRS732::AUTO_SLOT_015",
+        "roomId": "RRS732",
+        "roomName": "RRS732",
+        "slotId": "AUTO_SLOT_015",
+        "timeLabel": "2026-04-11 14:35-15:20"
+      }
+    },
+    {
+      "student": {
+        "id": "S144",
+        "name": "150",
+        "supervisorId": "P26",
+        "observerId": "P29"
+      },
+      "roomSlot": {
+        "id": "RRS735::AUTO_SLOT_005",
+        "roomId": "RRS735",
+        "roomName": "RRS735",
+        "slotId": "AUTO_SLOT_005",
+        "timeLabel": "2026-04-10 13:45-14:30"
+      }
+    },
+    {
+      "student": {
+        "id": "S145",
+        "name": "151",
+        "supervisorId": "P26",
+        "observerId": "P10"
+      },
+      "roomSlot": {
+        "id": "RRS732::AUTO_SLOT_007",
+        "roomId": "RRS732",
+        "roomName": "RRS732",
+        "slotId": "AUTO_SLOT_007",
+        "timeLabel": "2026-04-10 15:30-16:15"
+      }
+    },
+    {
+      "student": {
+        "id": "S146",
+        "name": "152",
+        "supervisorId": "P11",
+        "observerId": "P10"
+      },
+      "roomSlot": {
+        "id": "FSC901E::AUTO_SLOT_033",
+        "roomId": "FSC901E",
+        "roomName": "FSC901E",
+        "slotId": "AUTO_SLOT_033",
+        "timeLabel": "2026-04-14 14:35-15:20"
+      }
+    },
+    {
+      "student": {
+        "id": "S147",
+        "name": "153",
+        "supervisorId": "P10",
+        "observerId": "P26"
+      },
+      "roomSlot": {
+        "id": "RRS735::AUTO_SLOT_006",
+        "roomId": "RRS735",
+        "roomName": "RRS735",
+        "slotId": "AUTO_SLOT_006",
+        "timeLabel": "2026-04-10 14:35-15:20"
+      }
+    },
+    {
+      "student": {
+        "id": "S148",
+        "name": "154",
+        "supervisorId": "P34",
+        "observerId": "P11"
+      },
+      "roomSlot": {
+        "id": "RRS735::AUTO_SLOT_032",
+        "roomId": "RRS735",
+        "roomName": "RRS735",
+        "slotId": "AUTO_SLOT_032",
+        "timeLabel": "2026-04-14 13:45-14:30"
+      }
+    },
+    {
+      "student": {
+        "id": "S149",
+        "name": "155",
+        "supervisorId": "P38",
+        "observerId": "P34"
+      },
+      "roomSlot": {
+        "id": "DLB646::AUTO_SLOT_033",
+        "roomId": "DLB646",
+        "roomName": "DLB646",
+        "slotId": "AUTO_SLOT_033",
+        "timeLabel": "2026-04-14 14:35-15:20"
+      }
+    },
+    {
+      "student": {
+        "id": "S150",
+        "name": "156",
+        "supervisorId": "P34",
+        "observerId": "P26"
+      },
+      "roomSlot": {
+        "id": "DLB646::AUTO_SLOT_001",
+        "roomId": "DLB646",
+        "roomName": "DLB646",
+        "slotId": "AUTO_SLOT_001",
+        "timeLabel": "2026-04-10 09:00-09:45"
+      }
+    },
+    {
+      "student": {
+        "id": "S151",
+        "name": "157",
+        "supervisorId": "P34",
+        "observerId": "P29"
+      },
+      "roomSlot": {
+        "id": "FSC801C/D::AUTO_SLOT_003",
+        "roomId": "FSC801C/D",
+        "roomName": "FSC801C/D",
+        "slotId": "AUTO_SLOT_003",
+        "timeLabel": "2026-04-10 10:40-11:25"
+      }
+    },
+    {
+      "student": {
+        "id": "S152",
+        "name": "158",
+        "supervisorId": "P26",
+        "observerId": "P11"
+      },
+      "roomSlot": {
+        "id": "FSC901E::AUTO_SLOT_043",
+        "roomId": "FSC901E",
+        "roomName": "FSC901E",
+        "slotId": "AUTO_SLOT_043",
+        "timeLabel": "2026-04-15 15:30-16:15"
+      }
+    },
+    {
+      "student": {
+        "id": "S153",
+        "name": "159",
+        "supervisorId": "P29",
+        "observerId": "P26"
+      },
+      "roomSlot": {
+        "id": "DLB646::AUTO_SLOT_039",
+        "roomId": "DLB646",
+        "roomName": "DLB646",
+        "slotId": "AUTO_SLOT_039",
+        "timeLabel": "2026-04-15 10:40-11:25"
+      }
+    },
+    {
+      "student": {
+        "id": "S154",
+        "name": "160",
+        "supervisorId": "P29",
+        "observerId": "P10"
+      },
+      "roomSlot": {
+        "id": "RRS735::AUTO_SLOT_050",
+        "roomId": "RRS735",
+        "roomName": "RRS735",
+        "slotId": "AUTO_SLOT_050",
+        "timeLabel": "2026-04-16 13:45-14:30"
+      }
+    },
+    {
+      "student": {
+        "id": "S155",
+        "name": "161",
+        "supervisorId": "P25",
+        "observerId": "P26"
+      },
+      "roomSlot": {
+        "id": "FSC901E::AUTO_SLOT_038",
+        "roomId": "FSC901E",
+        "roomName": "FSC901E",
+        "slotId": "AUTO_SLOT_038",
+        "timeLabel": "2026-04-15 09:50-10:35"
+      }
+    },
+    {
+      "student": {
+        "id": "S156",
+        "name": "162",
+        "supervisorId": "P26",
+        "observerId": "P34"
+      },
+      "roomSlot": {
+        "id": "FSC801C/D::AUTO_SLOT_026",
+        "roomId": "FSC801C/D",
+        "roomName": "FSC801C/D",
+        "slotId": "AUTO_SLOT_026",
+        "timeLabel": "2026-04-13 16:20-17:05"
+      }
+    },
+    {
+      "student": {
+        "id": "S157",
+        "name": "163",
+        "supervisorId": "P10",
+        "observerId": "P25"
+      },
+      "roomSlot": {
+        "id": "RRS732::AUTO_SLOT_031",
+        "roomId": "RRS732",
+        "roomName": "RRS732",
+        "slotId": "AUTO_SLOT_031",
+        "timeLabel": "2026-04-14 11:30-12:15"
+      }
+    },
+    {
+      "student": {
+        "id": "S158",
+        "name": "164",
+        "supervisorId": "P25",
+        "observerId": "P29"
+      },
+      "roomSlot": {
+        "id": "FSC901E::AUTO_SLOT_021",
+        "roomId": "FSC901E",
+        "roomName": "FSC901E",
+        "slotId": "AUTO_SLOT_021",
+        "timeLabel": "2026-04-13 10:40-11:25"
+      }
+    },
+    {
+      "student": {
+        "id": "S159",
+        "name": "165",
+        "supervisorId": "P34",
+        "observerId": "P38"
+      },
+      "roomSlot": {
+        "id": "RRS732::AUTO_SLOT_019",
+        "roomId": "RRS732",
+        "roomName": "RRS732",
+        "slotId": "AUTO_SLOT_019",
+        "timeLabel": "2026-04-13 09:00-09:45"
+      }
+    },
+    {
+      "student": {
+        "id": "S160",
+        "name": "166",
+        "supervisorId": "P10",
+        "observerId": "P38"
+      },
+      "roomSlot": {
+        "id": "FSC901E::AUTO_SLOT_041",
+        "roomId": "FSC901E",
+        "roomName": "FSC901E",
+        "slotId": "AUTO_SLOT_041",
+        "timeLabel": "2026-04-15 13:45-14:30"
+      }
+    },
+    {
+      "student": {
+        "id": "S161",
+        "name": "167",
+        "supervisorId": "P34",
+        "observerId": "P10"
+      },
+      "roomSlot": {
+        "id": "FSC901E::AUTO_SLOT_051",
+        "roomId": "FSC901E",
+        "roomName": "FSC901E",
+        "slotId": "AUTO_SLOT_051",
+        "timeLabel": "2026-04-16 14:35-15:20"
+      }
+    },
+    {
+      "student": {
+        "id": "S162",
+        "name": "168",
+        "supervisorId": "P34",
+        "observerId": "P25"
+      },
+      "roomSlot": {
+        "id": "RRS732::AUTO_SLOT_049",
+        "roomId": "RRS732",
+        "roomName": "RRS732",
+        "slotId": "AUTO_SLOT_049",
+        "timeLabel": "2026-04-16 11:30-12:15"
+      }
+    },
+    {
+      "student": {
+        "id": "S163",
+        "name": "169",
+        "supervisorId": "P29",
+        "observerId": "P34"
+      },
+      "roomSlot": {
+        "id": "RRS732::AUTO_SLOT_029",
+        "roomId": "RRS732",
+        "roomName": "RRS732",
+        "slotId": "AUTO_SLOT_029",
+        "timeLabel": "2026-04-14 09:50-10:35"
+      }
+    },
+    {
+      "student": {
+        "id": "S164",
+        "name": "170",
+        "supervisorId": "P11",
+        "observerId": "P34"
+      },
+      "roomSlot": {
+        "id": "RRS638::AUTO_SLOT_035",
+        "roomId": "RRS638",
+        "roomName": "RRS638",
+        "slotId": "AUTO_SLOT_035",
+        "timeLabel": "2026-04-14 16:20-17:05"
+      }
+    },
+    {
+      "student": {
+        "id": "S165",
+        "name": "171",
+        "supervisorId": "P25",
+        "observerId": "P10"
+      },
+      "roomSlot": {
+        "id": "RRS638::AUTO_SLOT_052",
+        "roomId": "RRS638",
+        "roomName": "RRS638",
+        "slotId": "AUTO_SLOT_052",
+        "timeLabel": "2026-04-16 15:30-16:15"
+      }
+    },
+    {
+      "student": {
+        "id": "S166",
+        "name": "172",
+        "supervisorId": "P11",
+        "observerId": "P34"
+      },
+      "roomSlot": {
+        "id": "FSC901E::AUTO_SLOT_023",
+        "roomId": "FSC901E",
+        "roomName": "FSC901E",
+        "slotId": "AUTO_SLOT_023",
+        "timeLabel": "2026-04-13 13:45-14:30"
+      }
+    }
+  ],
+  "unscheduled": [
+    {
+      "student": {
+        "id": "S5",
+        "name": "5",
+        "supervisorId": "P16",
+        "observerId": "P19"
+      },
+      "reason": "PROF_BUSY",
+      "details": "可用時段已被其他安排占用，或教授在同時段有衝堂。"
+    },
+    {
+      "student": {
+        "id": "S7",
+        "name": "7",
+        "supervisorId": "P19",
+        "observerId": "P16"
+      },
+      "reason": "PROF_BUSY",
+      "details": "可用時段已被其他安排占用，或教授在同時段有衝堂。"
+    },
+    {
+      "student": {
+        "id": "S14",
+        "name": "14",
+        "supervisorId": "P19",
+        "observerId": "P20"
+      },
+      "reason": "NO_COMMON_TIME",
+      "details": "指導教授與口試教授沒有任何共同可用時段。"
+    },
+    {
+      "student": {
+        "id": "S42",
+        "name": "42",
+        "supervisorId": "P32",
+        "observerId": "P35"
+      },
+      "reason": "NO_COMMON_TIME",
+      "details": "指導教授與口試教授沒有任何共同可用時段。"
+    },
+    {
+      "student": {
+        "id": "S80",
+        "name": "81",
+        "supervisorId": "P27",
+        "observerId": "P24"
+      },
+      "reason": "NO_COMMON_TIME",
+      "details": "指導教授與口試教授沒有任何共同可用時段。"
+    },
+    {
+      "student": {
+        "id": "S83",
+        "name": "84",
+        "supervisorId": "P17",
+        "observerId": "P31"
+      },
+      "reason": "NO_COMMON_TIME",
+      "details": "指導教授與口試教授沒有任何共同可用時段。"
+    },
+    {
+      "student": {
+        "id": "S99",
+        "name": "100",
+        "supervisorId": "P17",
+        "observerId": "P24"
+      },
+      "reason": "NO_COMMON_TIME",
+      "details": "指導教授與口試教授沒有任何共同可用時段。"
+    },
+    {
+      "student": {
+        "id": "S115",
+        "name": "116",
+        "supervisorId": "P24",
+        "observerId": "P31"
+      },
+      "reason": "NO_COMMON_TIME",
+      "details": "指導教授與口試教授沒有任何共同可用時段。"
+    },
+    {
+      "student": {
+        "id": "S130",
+        "name": "133",
+        "supervisorId": "P19",
+        "observerId": "P36"
+      },
+      "reason": "NO_COMMON_TIME",
+      "details": "指導教授與口試教授沒有任何共同可用時段。"
+    }
+  ],
+  "softConstraintCost": null
+}
