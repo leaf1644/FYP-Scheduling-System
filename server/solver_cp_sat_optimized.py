@@ -4,6 +4,12 @@ import sys
 from collections import defaultdict
 
 from ortools.sat.python import cp_model
+from faculty_priority import (
+    build_professor_priority_context,
+    calculate_weighted_soft_cost,
+    count_professor_student_loads,
+    get_preference_weight,
+)
 
 
 def read_payload():
@@ -30,45 +36,20 @@ def get_date_from_slot(label: str) -> str:
     return normalized
 
 
-def calculate_soft_cost(assignments, students, prof_preferences):
-    if not prof_preferences:
-        return None
-
-    prof_stats = {}
-    for assignment in assignments:
-        student = assignment["student"]
-        day = get_date_from_slot(assignment["roomSlot"]["timeLabel"])
-
-        for professor_id in (student["supervisorId"], student["observerId"]):
-            if professor_id not in prof_stats:
-                prof_stats[professor_id] = {"days": set(), "dailyLoad": defaultdict(int)}
-            prof_stats[professor_id]["days"].add(day)
-            prof_stats[professor_id]["dailyLoad"][day] += 1
-
-    total_cost = 0
-    for professor_id, stats in prof_stats.items():
-        pref = prof_preferences.get(professor_id, {"type": "CONCENTRATE", "weight": 10})
-        pref_type = pref.get("type", "CONCENTRATE")
-        weight = int(pref.get("weight", 10) or 10)
-
-        if pref_type == "CONCENTRATE":
-            if len(stats["days"]) > 1:
-                total_cost += (len(stats["days"]) - 1) * weight
-            continue
-
-        if pref_type == "MAX_PER_DAY":
-            limit = int(pref.get("target", 3) or 3)
-            for load in stats["dailyLoad"].values():
-                if load > limit:
-                    total_cost += (load - limit) * weight
-            continue
-
-        total_load = sum(stats["dailyLoad"].values())
-        ideal_days = (total_load + 1) // 2
-        if len(stats["days"]) < ideal_days:
-            total_cost += (ideal_days - len(stats["days"])) * weight
-
-    return total_cost
+def calculate_soft_cost(assignments, students, prof_preferences, professor_priority_context):
+    assignment_records = [
+        {
+            "student": assignment["student"],
+            "day": get_date_from_slot(assignment["roomSlot"]["timeLabel"]),
+        }
+        for assignment in assignments
+    ]
+    return calculate_weighted_soft_cost(
+        assignment_records,
+        prof_preferences,
+        professor_priority_context,
+        prioritize_faculty=False,
+    )
 
 
 def main():
@@ -77,6 +58,7 @@ def main():
     all_room_slots = payload.get("allRoomSlots", [])
     prof_availability = payload.get("profAvailability", {})
     prof_preferences = payload.get("profPreferences", {})
+    professor_priority_context = build_professor_priority_context(students)
     
     # 優化 1: 將 timeout_ms 預設改為 20000，允許最大調整至 120000
     timeout_ms = payload.get("timeoutMs", 20000)
@@ -91,6 +73,12 @@ def main():
     student_vars = {}
     room_slot_to_vars = defaultdict(list)
     professor_slot_to_vars = defaultdict(list)
+    professor_day_to_vars = defaultdict(list)
+    slot_day_by_slot_id = {
+        room_slot["slotId"]: get_date_from_slot(room_slot.get("timeLabel", ""))
+        for room_slot in all_room_slots
+    }
+    all_days = sorted(set(slot_day_by_slot_id.values()))
 
     for student_index, student in enumerate(students):
         # 取得指導教授與口試教授的可用時段（前端已處理 "if necessary" → true）
@@ -122,6 +110,9 @@ def main():
             room_slot = all_room_slots[room_slot_index]
             professor_slot_to_vars[(student["supervisorId"], room_slot["slotId"])].append(var)
             professor_slot_to_vars[(student["observerId"], room_slot["slotId"])].append(var)
+            day = slot_day_by_slot_id.get(room_slot["slotId"], room_slot.get("timeLabel", ""))
+            professor_day_to_vars[(student["supervisorId"], day)].append(var)
+            professor_day_to_vars[(student["observerId"], day)].append(var)
 
         # 每個學生最多被分配到一個時段
         if vars_for_student:
@@ -135,9 +126,74 @@ def main():
     for vars_for_prof_slot in professor_slot_to_vars.values():
         model.Add(sum(vars_for_prof_slot) <= 1)
 
-    # 目標：最大化被分配的學生數量
-    objective_terms = list(student_vars.values())
-    model.Maximize(sum(objective_terms))
+    # 目標：先最大化被分配的學生數量，再依教授職級與網站順序最小化偏好違反
+    assignment_count = sum(student_vars.values())
+    soft_penalty_terms = []
+    soft_penalty_upper_bound = 0
+
+    if prof_preferences:
+        professor_loads = count_professor_student_loads(students)
+        for professor_id, pref in prof_preferences.items():
+            pref_type = pref.get("type", "CONCENTRATE")
+            effective_weight = get_preference_weight(
+                professor_id,
+                prof_preferences,
+                professor_priority_context,
+                prioritize_faculty=True,
+            )
+            day_used_vars = []
+
+            for day in all_days:
+                day_vars = professor_day_to_vars.get((professor_id, day), [])
+                if not day_vars:
+                    continue
+                day_used = model.NewBoolVar(f"prof_day_used_{professor_id}_{abs(hash(day))}")
+                model.AddMaxEquality(day_used, day_vars)
+                day_used_vars.append(day_used)
+
+            if pref_type == "CONCENTRATE":
+                if day_used_vars:
+                    extra_days = model.NewIntVar(0, len(day_used_vars), f"extra_days_{professor_id}")
+                    model.Add(extra_days >= sum(day_used_vars) - 1)
+                    soft_penalty_terms.append(extra_days * effective_weight)
+                    soft_penalty_upper_bound += max(0, len(day_used_vars) - 1) * effective_weight
+                continue
+
+            if pref_type == "MAX_PER_DAY":
+                limit = int(pref.get("target", 3) or 3)
+                for day in all_days:
+                    day_vars = professor_day_to_vars.get((professor_id, day), [])
+                    if not day_vars:
+                        continue
+                    max_excess = max(0, len(day_vars) - limit)
+                    if max_excess == 0:
+                        continue
+                    excess = model.NewIntVar(0, max_excess, f"daily_excess_{professor_id}_{abs(hash(day))}")
+                    model.Add(excess >= sum(day_vars) - limit)
+                    soft_penalty_terms.append(excess * effective_weight)
+                    soft_penalty_upper_bound += max_excess * effective_weight
+                continue
+
+            total_load_expr = sum(
+                var
+                for (student_index, room_slot_index), var in student_vars.items()
+                if professor_id in (
+                    students[student_index]["supervisorId"],
+                    students[student_index]["observerId"],
+                )
+            )
+            max_shortage = (professor_loads.get(professor_id, 0) + 1) // 2
+            if max_shortage > 0:
+                shortage = model.NewIntVar(0, max_shortage, f"spread_shortage_{professor_id}")
+                model.Add(total_load_expr <= 2 * sum(day_used_vars) + 2 * shortage)
+                soft_penalty_terms.append(shortage * effective_weight)
+                soft_penalty_upper_bound += max_shortage * effective_weight
+
+    if soft_penalty_terms:
+        assignment_scale = soft_penalty_upper_bound + 1
+        model.Maximize(assignment_count * assignment_scale - sum(soft_penalty_terms))
+    else:
+        model.Maximize(assignment_count)
 
     # 優化 4: 加入 CpSolverParameters，設定更多 workers 與更好的 branching_strategy
     solver = cp_model.CpSolver()
@@ -198,7 +254,7 @@ def main():
         "success": len(unscheduled) == 0,
         "assignments": assignments,
         "unscheduled": unscheduled,
-        "softConstraintCost": calculate_soft_cost(assignments, students, prof_preferences),
+        "softConstraintCost": calculate_soft_cost(assignments, students, prof_preferences, professor_priority_context),
     }
     print(json.dumps(result, ensure_ascii=False))
 

@@ -1,6 +1,7 @@
 ﻿import React, { ChangeEvent, useState } from 'react';
 import { Upload, FileCheck, FileX } from 'lucide-react';
 import { getTabularHeaders } from '../utils/tabularParser';
+import { useI18n } from '../i18n';
 
 interface FileUploadProps {
   label: string;
@@ -19,6 +20,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
   onFileSelect,
   requiredHeaders,
 }) => {
+  const { t } = useI18n();
   const [headerError, setHeaderError] = useState<string>('');
 
   const validateHeaders = async (selectedFile: File) => {
@@ -34,7 +36,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
       const missing = requiredHeaders.filter((h) => !headerSet.has(h.toLowerCase()));
 
       if (missing.length > 0) {
-        setHeaderError(`缺少必要欄位: ${missing.join(', ')}`);
+        setHeaderError(t('upload.missingHeaders', { columns: missing.join(', ') }));
         onFileSelect(null);
         return;
       }
@@ -42,7 +44,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
       setHeaderError('');
       onFileSelect(selectedFile);
     } catch {
-      setHeaderError('檔案解析失敗，請確認 CSV/XLSX 格式。');
+      setHeaderError(t('upload.parseFailed'));
       onFileSelect(null);
     }
   };
@@ -78,23 +80,23 @@ const FileUpload: React.FC<FileUploadProps> = ({
         {headerError ? (
           <div className="text-center">
             <FileX className="w-10 h-10 text-red-600 mx-auto mb-2" />
-            <p className="text-sm font-medium text-red-800">檔案欄位檢查失敗</p>
+            <p className="text-sm font-medium text-red-800">{t('upload.checkFailed')}</p>
             <p className="text-xs text-red-600 mt-1">{headerError}</p>
           </div>
         ) : file ? (
           <div className="text-center">
             <FileCheck className="w-10 h-10 text-green-600 mx-auto mb-2" />
             <p className="text-sm font-medium text-green-800">{file.name}</p>
-            <p className="text-xs text-green-600 mt-1">檔案已上傳</p>
+            <p className="text-xs text-green-600 mt-1">{t('upload.fileUploaded')}</p>
           </div>
         ) : (
           <div className="text-center pointer-events-none">
             <Upload className="w-10 h-10 text-gray-400 mx-auto mb-2" />
-            <p className="text-sm text-gray-500 font-medium">拖放或點擊上傳 CSV / XLSX</p>
+            <p className="text-sm text-gray-500 font-medium">{t('upload.dropOrClick')}</p>
             <p className="text-xs text-gray-400 mt-1">{description}</p>
             {requiredHeaders && (
               <p className="text-[10px] text-gray-400 mt-2">
-                Required Columns: {requiredHeaders.join(', ')}
+                {t('labels.requiredColumns')} {requiredHeaders.join(', ')}
               </p>
             )}
           </div>

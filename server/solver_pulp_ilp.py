@@ -10,6 +10,12 @@ from pulp import (
     PULP_CBC_CMD,
     LpStatus,
 )
+from faculty_priority import (
+    build_professor_priority_context,
+    calculate_weighted_soft_cost,
+    count_professor_student_loads,
+    get_preference_weight,
+)
 
 
 def read_payload():
@@ -36,45 +42,20 @@ def get_date_from_slot(label: str) -> str:
     return normalized
 
 
-def calculate_soft_cost(assignments, students, prof_preferences):
-    if not prof_preferences:
-        return None
-
-    prof_stats = {}
-    for assignment in assignments:
-        student = assignment["student"]
-        day = get_date_from_slot(assignment["roomSlot"]["timeLabel"])
-
-        for professor_id in (student["supervisorId"], student["observerId"]):
-            if professor_id not in prof_stats:
-                prof_stats[professor_id] = {"days": set(), "dailyLoad": defaultdict(int)}
-            prof_stats[professor_id]["days"].add(day)
-            prof_stats[professor_id]["dailyLoad"][day] += 1
-
-    total_cost = 0
-    for professor_id, stats in prof_stats.items():
-        pref = prof_preferences.get(professor_id, {"type": "CONCENTRATE", "weight": 10})
-        pref_type = pref.get("type", "CONCENTRATE")
-        weight = int(pref.get("weight", 10) or 10)
-
-        if pref_type == "CONCENTRATE":
-            if len(stats["days"]) > 1:
-                total_cost += (len(stats["days"]) - 1) * weight
-            continue
-
-        if pref_type == "MAX_PER_DAY":
-            limit = int(pref.get("target", 3) or 3)
-            for load in stats["dailyLoad"].values():
-                if load > limit:
-                    total_cost += (load - limit) * weight
-            continue
-
-        total_load = sum(stats["dailyLoad"].values())
-        ideal_days = (total_load + 1) // 2
-        if len(stats["days"]) < ideal_days:
-            total_cost += (ideal_days - len(stats["days"])) * weight
-
-    return total_cost
+def calculate_soft_cost(assignments, students, prof_preferences, professor_priority_context):
+    assignment_records = [
+        {
+            "student": assignment["student"],
+            "day": get_date_from_slot(assignment["roomSlot"]["timeLabel"]),
+        }
+        for assignment in assignments
+    ]
+    return calculate_weighted_soft_cost(
+        assignment_records,
+        prof_preferences,
+        professor_priority_context,
+        prioritize_faculty=False,
+    )
 
 
 def main():
@@ -83,6 +64,7 @@ def main():
     all_room_slots = payload.get("allRoomSlots", [])
     prof_availability = payload.get("profAvailability", {})
     prof_preferences = payload.get("profPreferences", {})
+    professor_priority_context = build_professor_priority_context(students)
     timeout_ms = payload.get("timeoutMs", 120000)
     if timeout_ms is None:
         timeout_ms = 120000
@@ -97,6 +79,12 @@ def main():
     # 決策變數：x[i][j] = 1 如果學生 i 分配到房間時段 j
     x = {}
     student_domains = []
+    professor_day_to_vars = defaultdict(list)
+    slot_day_by_slot_id = {
+        room_slot["slotId"]: get_date_from_slot(room_slot.get("timeLabel", ""))
+        for room_slot in all_room_slots
+    }
+    all_days = sorted(set(slot_day_by_slot_id.values()))
 
     for student_index, student in enumerate(students):
         sup_slots = set(prof_availability.get(student["supervisorId"], []))
@@ -110,11 +98,13 @@ def main():
                 # 創建二元變數
                 var_name = f"x_{student_index}_{room_slot_index}"
                 x[(student_index, room_slot_index)] = LpVariable(var_name, cat="Binary")
+                day = slot_day_by_slot_id.get(room_slot_id, room_slot.get("timeLabel", ""))
+                professor_day_to_vars[(student["supervisorId"], day)].append(x[(student_index, room_slot_index)])
+                professor_day_to_vars[(student["observerId"], day)].append(x[(student_index, room_slot_index)])
 
         student_domains.append(domain)
 
-    # 目標函數：最大化被分配的學生數量
-    prob += lpSum([x[key] for key in x.keys()]), "maximize_assignments"
+    assignment_count = lpSum([x[key] for key in x.keys()])
 
     # 硬約束 1: 每個學生最多被分配到一個時段
     for student_index in range(len(students)):
@@ -154,6 +144,74 @@ def main():
             lpSum(vars_for_prof_slot) <= 1,
             f"prof_conflict_{prof_id}_{slot_id}"
         )
+
+    soft_penalty_terms = []
+    soft_penalty_upper_bound = 0
+    if prof_preferences:
+        professor_loads = count_professor_student_loads(students)
+        for professor_id, pref in prof_preferences.items():
+            pref_type = pref.get("type", "CONCENTRATE")
+            effective_weight = get_preference_weight(
+                professor_id,
+                prof_preferences,
+                professor_priority_context,
+                prioritize_faculty=True,
+            )
+
+            day_used_vars = []
+            for day in all_days:
+                day_vars = professor_day_to_vars.get((professor_id, day), [])
+                if not day_vars:
+                    continue
+                day_used = LpVariable(f"prof_day_used_{professor_id}_{abs(hash(day))}", cat="Binary")
+                day_used_vars.append(day_used)
+                prob += day_used <= lpSum(day_vars), f"day_used_upper_{professor_id}_{abs(hash(day))}"
+                for index, var in enumerate(day_vars):
+                    prob += day_used >= var, f"day_used_lower_{professor_id}_{abs(hash(day))}_{index}"
+
+            if pref_type == "CONCENTRATE":
+                if day_used_vars:
+                    extra_days = LpVariable(f"extra_days_{professor_id}", lowBound=0, upBound=len(day_used_vars), cat="Integer")
+                    prob += extra_days >= lpSum(day_used_vars) - 1, f"extra_days_lb_{professor_id}"
+                    soft_penalty_terms.append(extra_days * effective_weight)
+                    soft_penalty_upper_bound += max(0, len(day_used_vars) - 1) * effective_weight
+                continue
+
+            if pref_type == "MAX_PER_DAY":
+                limit = int(pref.get("target", 3) or 3)
+                for day in all_days:
+                    day_vars = professor_day_to_vars.get((professor_id, day), [])
+                    if not day_vars:
+                        continue
+                    max_excess = max(0, len(day_vars) - limit)
+                    if max_excess == 0:
+                        continue
+                    excess = LpVariable(f"daily_excess_{professor_id}_{abs(hash(day))}", lowBound=0, upBound=max_excess, cat="Integer")
+                    prob += excess >= lpSum(day_vars) - limit, f"daily_excess_lb_{professor_id}_{abs(hash(day))}"
+                    soft_penalty_terms.append(excess * effective_weight)
+                    soft_penalty_upper_bound += max_excess * effective_weight
+                continue
+
+            total_load_expr = lpSum(
+                var
+                for (student_index, _room_slot_index), var in x.items()
+                if professor_id in (
+                    students[student_index]["supervisorId"],
+                    students[student_index]["observerId"],
+                )
+            )
+            max_shortage = (professor_loads.get(professor_id, 0) + 1) // 2
+            if max_shortage > 0:
+                shortage = LpVariable(f"spread_shortage_{professor_id}", lowBound=0, upBound=max_shortage, cat="Integer")
+                prob += total_load_expr <= 2 * lpSum(day_used_vars) + 2 * shortage, f"spread_shortage_lb_{professor_id}"
+                soft_penalty_terms.append(shortage * effective_weight)
+                soft_penalty_upper_bound += max_shortage * effective_weight
+
+    if soft_penalty_terms:
+        assignment_scale = soft_penalty_upper_bound + 1
+        prob += assignment_count * assignment_scale - lpSum(soft_penalty_terms), "maximize_assignments_then_weighted_preferences"
+    else:
+        prob += assignment_count, "maximize_assignments"
 
     # 使用 CBC 求解器，設定 timeout
     solver_options = [
@@ -225,7 +283,7 @@ def main():
         "success": len(unscheduled) == 0,
         "assignments": assignments,
         "unscheduled": unscheduled,
-        "softConstraintCost": calculate_soft_cost(assignments, students, prof_preferences),
+        "softConstraintCost": calculate_soft_cost(assignments, students, prof_preferences, professor_priority_context),
     }
     print(json.dumps(result, ensure_ascii=False))
 

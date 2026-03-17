@@ -6,6 +6,7 @@ import random
 from collections import defaultdict
 from copy import deepcopy
 from functools import cmp_to_key
+from faculty_priority import build_professor_priority_context, calculate_weighted_soft_cost
 
 def read_payload():
     raw = sys.stdin.read()
@@ -31,47 +32,25 @@ def get_date_from_slot(label: str) -> str:
     return normalized
 
 
-def calculate_soft_cost(assignments, students, prof_preferences):
+def calculate_soft_cost(assignments, students, prof_preferences, professor_priority_context, prioritize_faculty=False):
     if not prof_preferences:
         return None
 
-    prof_stats = {}
+    assignment_records = []
     for assignment in assignments:
         if not assignment:
             continue
-        student = assignment["student"]
-        day = get_date_from_slot(assignment["roomSlot"]["timeLabel"])
+        assignment_records.append({
+            "student": assignment["student"],
+            "day": get_date_from_slot(assignment["roomSlot"]["timeLabel"]),
+        })
 
-        for professor_id in (student["supervisorId"], student["observerId"]):
-            if professor_id not in prof_stats:
-                prof_stats[professor_id] = {"days": set(), "dailyLoad": defaultdict(int)}
-            prof_stats[professor_id]["days"].add(day)
-            prof_stats[professor_id]["dailyLoad"][day] += 1
-
-    total_cost = 0
-    for professor_id, stats in prof_stats.items():
-        pref = prof_preferences.get(professor_id, {"type": "CONCENTRATE", "weight": 10})
-        pref_type = pref.get("type", "CONCENTRATE")
-        weight = int(pref.get("weight", 10) or 10)
-
-        if pref_type == "CONCENTRATE":
-            if len(stats["days"]) > 1:
-                total_cost += (len(stats["days"]) - 1) * weight
-            continue
-
-        if pref_type == "MAX_PER_DAY":
-            limit = int(pref.get("target", 3) or 3)
-            for load in stats["dailyLoad"].values():
-                if load > limit:
-                    total_cost += (load - limit) * weight
-            continue
-
-        total_load = sum(stats["dailyLoad"].values())
-        ideal_days = (total_load + 1) // 2
-        if len(stats["days"]) < ideal_days:
-            total_cost += (ideal_days - len(stats["days"])) * weight
-
-    return total_cost
+    return calculate_weighted_soft_cost(
+        assignment_records,
+        prof_preferences,
+        professor_priority_context,
+        prioritize_faculty=prioritize_faculty,
+    )
 
 
 def get_static_domain(student, all_room_slots, prof_availability):
@@ -246,6 +225,7 @@ def optimize_schedule(ctx):
         [{"student": ctx["students"][i]["student"], "roomSlot": a["roomSlot"]} 
          for i, a in enumerate(ctx["assignments"]) if a],
         ctx["students"], ctx["prof_preferences"]
+        , ctx["professor_priority_context"], True
     ) or 0
     for _ in range(3000):
         if has_timed_out(ctx["start_time"], ctx["timeout_ms"]):
@@ -267,6 +247,7 @@ def optimize_schedule(ctx):
             [{"student": ctx["students"][i]["student"], "roomSlot": a["roomSlot"]} 
              for i, a in enumerate(ctx["assignments"]) if a],
             ctx["students"], ctx["prof_preferences"]
+            , ctx["professor_priority_context"], True
         ) or 0
         if new_cost <= current_cost:
             current_cost = new_cost
@@ -363,6 +344,7 @@ def main():
     all_room_slots = payload.get("allRoomSlots", [])
     prof_availability = payload.get("profAvailability", {})
     prof_preferences = payload.get("profPreferences", {})
+    professor_priority_context = build_professor_priority_context(students)
     timeout_raw = payload.get("timeoutMs", 1500)
     timeout_ms = max(500, int(timeout_raw if timeout_raw is not None else 1500))
 
@@ -396,6 +378,7 @@ def main():
         "slot_demand": defaultdict(int),
         "start_time": time.time(),
         "prof_preferences": prof_preferences,
+        "professor_priority_context": professor_priority_context,
         "timeout_ms": timeout_ms,
     }
     for domain in student_domains:
@@ -439,7 +422,7 @@ def main():
         "success": len(unscheduled_list) == 0,
         "assignments": assignments,
         "unscheduled": unscheduled_list,
-        "softConstraintCost": calculate_soft_cost(assignments, students, prof_preferences)
+        "softConstraintCost": calculate_soft_cost(assignments, students, prof_preferences, professor_priority_context)
     }
     print(json.dumps(result, ensure_ascii=False))
 

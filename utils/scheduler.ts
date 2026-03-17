@@ -1,7 +1,7 @@
 import { Student, RoomSlot, ScheduleResult, ProfPreference } from '../types';
 import SchedulerWorker from './scheduler.worker?worker';
 
-export type SolverMode = 'cp-sat' | 'legacy';
+export type SolverMode = 'cp-sat' | 'pulp-ilp' | 'legacy-python';
 
 interface GenerateScheduleOptions {
   timeoutMs?: number;
@@ -63,6 +63,40 @@ const runCpSatSolver = async (payload: SolverPayload): Promise<ScheduleResult> =
   return data as ScheduleResult;
 };
 
+const runPulpSolver = async (payload: SolverPayload): Promise<ScheduleResult> => {
+  const response = await fetch('/api/solve-pulp-ilp', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data?.error || 'PuLP ILP 求解失敗');
+  }
+
+  return data as ScheduleResult;
+};
+
+const runLegacyPythonSolver = async (payload: SolverPayload): Promise<ScheduleResult> => {
+  const response = await fetch('/api/solve-legacy-python', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data?.error || 'Legacy Python 求解失敗');
+  }
+
+  return data as ScheduleResult;
+};
+
 export const generateSchedule = async (
   students: Student[],
   allRoomSlots: RoomSlot[],
@@ -78,14 +112,18 @@ export const generateSchedule = async (
     timeoutMs: options?.timeoutMs,
   };
 
-  if (options?.solverMode === 'legacy') {
-    return runLegacySolver(payload);
-  }
-
-  try {
-    return await runCpSatSolver(payload);
-  } catch (error) {
-    console.warn('CP-SAT solver unavailable, falling back to legacy worker.', error);
-    return runLegacySolver(payload);
+  switch (options?.solverMode) {
+    case 'legacy-python':
+      return runLegacyPythonSolver(payload);
+    case 'pulp-ilp':
+      return runPulpSolver(payload);
+    case 'cp-sat':
+    default:
+      try {
+        return await runCpSatSolver(payload);
+      } catch (error) {
+        console.warn('Selected Python solver unavailable, falling back to legacy worker.', error);
+        return runLegacySolver(payload);
+      }
   }
 };

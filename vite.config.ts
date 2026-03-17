@@ -14,7 +14,7 @@ interface AdviceRequestBody {
   failedAssignments?: FailedAssignment[];
 }
 
-interface CpSatRequestBody {
+interface SolverRequestBody {
   students?: unknown[];
   allRoomSlots?: unknown[];
   profAvailability?: Record<string, string[]>;
@@ -146,7 +146,7 @@ const createAiAdviceMiddleware = (apiKey?: string, model?: string) => {
   };
 };
 
-const runPythonCpSatSolver = (pythonBin: string, scriptPath: string, payload: CpSatRequestBody): Promise<unknown> => {
+const runPythonSolver = (pythonBin: string, scriptPath: string, payload: SolverRequestBody, solverName: string): Promise<unknown> => {
   return new Promise((resolve, reject) => {
     const child = spawn(pythonBin, [scriptPath], {
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -168,14 +168,14 @@ const runPythonCpSatSolver = (pythonBin: string, scriptPath: string, payload: Cp
     child.on('close', (code) => {
       const trimmedStdout = stdout.trim();
       if (code !== 0) {
-        reject(new Error(trimmedStdout || stderr.trim() || `CP-SAT solver exited with code ${code}`));
+        reject(new Error(trimmedStdout || stderr.trim() || `${solverName} solver exited with code ${code}`));
         return;
       }
 
       try {
         resolve(trimmedStdout ? JSON.parse(trimmedStdout) : {});
       } catch {
-        reject(new Error(trimmedStdout || 'CP-SAT solver returned invalid JSON'));
+        reject(new Error(trimmedStdout || `${solverName} solver returned invalid JSON`));
       }
     });
 
@@ -184,7 +184,7 @@ const runPythonCpSatSolver = (pythonBin: string, scriptPath: string, payload: Cp
   });
 };
 
-const createCpSatMiddleware = (pythonBin: string, scriptPath: string) => {
+const createPythonSolverMiddleware = (pythonBin: string, scriptPath: string, solverName: string) => {
   return async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
     if (req.method !== 'POST') {
       sendJson(res, 405, { error: 'Method Not Allowed' });
@@ -193,11 +193,11 @@ const createCpSatMiddleware = (pythonBin: string, scriptPath: string) => {
 
     try {
       const rawBody = await readRequestBody(req);
-      const body = (rawBody ? JSON.parse(rawBody) : {}) as CpSatRequestBody;
-      const result = await runPythonCpSatSolver(pythonBin, scriptPath, body);
+      const body = (rawBody ? JSON.parse(rawBody) : {}) as SolverRequestBody;
+      const result = await runPythonSolver(pythonBin, scriptPath, body, solverName);
       sendJson(res, 200, result);
     } catch (error: any) {
-      sendJson(res, 500, { error: error?.message || 'CP-SAT 求解失敗' });
+      sendJson(res, 500, { error: error?.message || `${solverName} 求解失敗` });
     }
   };
 };
@@ -206,8 +206,12 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
   const aiAdviceMiddleware = createAiAdviceMiddleware(env.GEMINI_API_KEY, env.GEMINI_MODEL);
   const pythonBin = env.PYTHON_BIN || 'python';
-  const cpSatScriptPath = path.resolve(__dirname, 'server', 'cp_sat_solver.py');
-  const cpSatMiddleware = createCpSatMiddleware(pythonBin, cpSatScriptPath);
+  const cpSatScriptPath = path.resolve(__dirname, 'server', 'solver_cp_sat_optimized.py');
+  const pulpScriptPath = path.resolve(__dirname, 'server', 'solver_pulp_ilp.py');
+  const legacyPythonScriptPath = path.resolve(__dirname, 'server', 'legacy_solver.py');
+  const cpSatMiddleware = createPythonSolverMiddleware(pythonBin, cpSatScriptPath, 'CP-SAT');
+  const pulpMiddleware = createPythonSolverMiddleware(pythonBin, pulpScriptPath, 'PuLP ILP');
+  const legacyPythonMiddleware = createPythonSolverMiddleware(pythonBin, legacyPythonScriptPath, 'Legacy Python');
 
   return {
     server: {
@@ -221,10 +225,14 @@ export default defineConfig(({ mode }) => {
         configureServer(server) {
           server.middlewares.use('/api/ai-advice', aiAdviceMiddleware);
           server.middlewares.use('/api/solve-cp-sat', cpSatMiddleware);
+          server.middlewares.use('/api/solve-pulp-ilp', pulpMiddleware);
+          server.middlewares.use('/api/solve-legacy-python', legacyPythonMiddleware);
         },
         configurePreviewServer(server) {
           server.middlewares.use('/api/ai-advice', aiAdviceMiddleware);
           server.middlewares.use('/api/solve-cp-sat', cpSatMiddleware);
+          server.middlewares.use('/api/solve-pulp-ilp', pulpMiddleware);
+          server.middlewares.use('/api/solve-legacy-python', legacyPythonMiddleware);
         },
       },
     ],
