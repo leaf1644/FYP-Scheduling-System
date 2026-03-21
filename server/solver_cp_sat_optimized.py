@@ -37,6 +37,7 @@ def get_date_from_slot(label: str) -> str:
 
 
 def calculate_soft_cost(assignments, students, prof_preferences, professor_priority_context):
+    # Convert concrete room-slot assignments into day-based records used by the shared soft-cost helper.
     assignment_records = [
         {
             "student": assignment["student"],
@@ -50,6 +51,35 @@ def calculate_soft_cost(assignments, students, prof_preferences, professor_prior
         professor_priority_context,
         prioritize_faculty=False,
     )
+
+
+def configure_solver(solver, timeout_seconds):
+    solver.parameters.max_time_in_seconds = timeout_seconds
+    solver.parameters.num_search_workers = 16
+    solver.parameters.log_search_progress = False
+    solver.parameters.cp_model_presolve = True
+    solver.parameters.linearization_level = 2
+    solver.parameters.search_branching = cp_model.PORTFOLIO_SEARCH
+    solver.parameters.use_absl_random = True
+    solver.parameters.random_seed = 42
+    solver.parameters.interleave_search = True
+
+
+def collect_assignments(solver, student_vars, students, all_room_slots):
+    assignments = []
+    assigned_students = set()
+
+    for (student_index, room_slot_index), var in student_vars.items():
+        if solver.Value(var) != 1:
+            continue
+
+        assigned_students.add(student_index)
+        assignments.append({
+            "student": students[student_index],
+            "roomSlot": all_room_slots[room_slot_index],
+        })
+
+    return assignments, assigned_students
 
 
 def main():
@@ -81,13 +111,11 @@ def main():
     all_days = sorted(set(slot_day_by_slot_id.values()))
 
     for student_index, student in enumerate(students):
-        # 取得指導教授與口試教授的可用時段（前端已處理 "if necessary" → true）
+        # 先收斂每位學生的候選 domain，只保留兩位教授都可出席的 room-slot。
         sup_slots = set(prof_availability.get(student["supervisorId"], []))
         obs_slots = set(prof_availability.get(student["observerId"], []))
         domain = []
 
-        # 優化 3: 改善時間區塊映射邏輯
-        # 確保 room 細時段正確對應教授粗區塊
         for room_slot_index, room_slot in enumerate(all_room_slots):
             room_slot_id = room_slot["slotId"]
             
@@ -114,19 +142,19 @@ def main():
             professor_day_to_vars[(student["supervisorId"], day)].append(var)
             professor_day_to_vars[(student["observerId"], day)].append(var)
 
-        # 每個學生最多被分配到一個時段
+        # 每位學生最多只能拿到一個 room-slot。
         if vars_for_student:
             model.Add(sum(vars_for_student) <= 1)
 
-    # 每個房間時段最多被分配一個學生
+    # 每個房間時段最多只能安排一位學生。
     for vars_for_room_slot in room_slot_to_vars.values():
         model.Add(sum(vars_for_room_slot) <= 1)
 
-    # 每個教授每個時段最多被分配一個學生
+    # 同一位教授不能在同一邏輯時段出現在兩場口試。
     for vars_for_prof_slot in professor_slot_to_vars.values():
         model.Add(sum(vars_for_prof_slot) <= 1)
 
-    # 目標：先最大化被分配的學生數量，再依教授職級與網站順序最小化偏好違反
+    # 目標採兩層次：先盡量排入更多學生，再最小化加權後的教授偏好違反。
     assignment_count = sum(student_vars.values())
     soft_penalty_terms = []
     soft_penalty_upper_bound = 0
@@ -189,47 +217,38 @@ def main():
                 soft_penalty_terms.append(shortage * effective_weight)
                 soft_penalty_upper_bound += max_shortage * effective_weight
 
-    if soft_penalty_terms:
-        assignment_scale = soft_penalty_upper_bound + 1
-        model.Maximize(assignment_count * assignment_scale - sum(soft_penalty_terms))
-    else:
-        model.Maximize(assignment_count)
+    phase_one_timeout_seconds = max(0.5, (timeout_ms / 1000) * 0.4)
+    phase_two_timeout_seconds = max(0.5, (timeout_ms / 1000) - phase_one_timeout_seconds)
 
-    # 優化 4: 加入 CpSolverParameters，設定更多 workers 與更好的 branching_strategy
-    solver = cp_model.CpSolver()
-    
-    # 配置求解器參數以達到更好的最優性
-    solver.parameters.max_time_in_seconds = timeout_ms / 1000
-    solver.parameters.num_search_workers = 16  # 增加 workers 數量（從 8 改為 16）
-    solver.parameters.log_search_progress = False
-    
-    # 設定更好的 branching strategy
-    solver.parameters.cp_model_presolve = True
-    solver.parameters.linearization_level = 2
-    solver.parameters.search_branching = cp_model.PORTFOLIO_SEARCH
-    solver.parameters.use_absl_random = True
-    solver.parameters.random_seed = 42
-    
-    # 進一步優化策略
-    solver.parameters.interleave_search = True
+    # Phase 1: maximize coverage only.
+    model.Maximize(assignment_count)
+    phase_one_solver = cp_model.CpSolver()
+    configure_solver(phase_one_solver, phase_one_timeout_seconds)
 
-    status = solver.Solve(model)
-    if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+    phase_one_status = phase_one_solver.Solve(model)
+    if phase_one_status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         print(json.dumps({"error": "CP-SAT 找不到可行解"}))
         return
 
-    assignments = []
-    assigned_students = set()
+    best_assignment_count = sum(
+        phase_one_solver.Value(var)
+        for var in student_vars.values()
+    )
 
-    for (student_index, room_slot_index), var in student_vars.items():
-        if solver.Value(var) != 1:
-            continue
+    # Phase 2: keep the best coverage and optimize only the soft penalties.
+    final_solver = phase_one_solver
+    if soft_penalty_terms:
+        model.Add(assignment_count == best_assignment_count)
+        model.Minimize(sum(soft_penalty_terms))
 
-        assigned_students.add(student_index)
-        assignments.append({
-            "student": students[student_index],
-            "roomSlot": all_room_slots[room_slot_index],
-        })
+        phase_two_solver = cp_model.CpSolver()
+        configure_solver(phase_two_solver, phase_two_timeout_seconds)
+
+        phase_two_status = phase_two_solver.Solve(model)
+        if phase_two_status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+            final_solver = phase_two_solver
+
+    assignments, assigned_students = collect_assignments(final_solver, student_vars, students, all_room_slots)
 
     unscheduled = []
     for student_index, student in enumerate(students):

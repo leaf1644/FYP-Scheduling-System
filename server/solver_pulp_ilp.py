@@ -18,6 +18,11 @@ from faculty_priority import (
 )
 
 
+ILP_TWO_PHASE_MAX_STUDENTS = 80
+ILP_TWO_PHASE_MAX_ASSIGNMENT_VARIABLES = 4000
+ILP_TWO_PHASE_MAX_PREFERENCE_COUNT = 8
+
+
 def read_payload():
     raw = sys.stdin.read()
     if not raw.strip():
@@ -56,6 +61,31 @@ def calculate_soft_cost(assignments, students, prof_preferences, professor_prior
         professor_priority_context,
         prioritize_faculty=False,
     )
+
+
+def build_solver(timeout_seconds):
+    solver_options = [
+        f"-sec {timeout_seconds:.1f}",
+        "-threads 8",
+    ]
+    return PULP_CBC_CMD(
+        timeLimit=timeout_seconds,
+        threads=8,
+        msg=0,
+        options=solver_options,
+    )
+
+
+def has_feasible_solution(status, variables):
+    if LpStatus[status] in ("Infeasible", "Unbounded"):
+        return False
+    return status == 1 or any(var.varValue is not None for var in variables.values())
+
+
+def should_enable_two_phase_soft_optimization(students, assignment_variable_count, preference_count):
+    if preference_count <= ILP_TWO_PHASE_MAX_PREFERENCE_COUNT:
+        return True
+    return len(students) <= ILP_TWO_PHASE_MAX_STUDENTS and assignment_variable_count <= ILP_TWO_PHASE_MAX_ASSIGNMENT_VARIABLES
 
 
 def main():
@@ -145,9 +175,11 @@ def main():
             f"prof_conflict_{prof_id}_{slot_id}"
         )
 
+    enable_two_phase_soft_optimization = bool(prof_preferences) and should_enable_two_phase_soft_optimization(students, len(x), len(prof_preferences))
+
     soft_penalty_terms = []
     soft_penalty_upper_bound = 0
-    if prof_preferences:
+    if enable_two_phase_soft_optimization:
         professor_loads = count_professor_student_loads(students)
         for professor_id, pref in prof_preferences.items():
             pref_type = pref.get("type", "CONCENTRATE")
@@ -207,45 +239,37 @@ def main():
                 soft_penalty_terms.append(shortage * effective_weight)
                 soft_penalty_upper_bound += max_shortage * effective_weight
 
-    if soft_penalty_terms:
-        assignment_scale = soft_penalty_upper_bound + 1
-        prob += assignment_count * assignment_scale - lpSum(soft_penalty_terms), "maximize_assignments_then_weighted_preferences"
-    else:
-        prob += assignment_count, "maximize_assignments"
+    phase_one_timeout_seconds = max(0.5, timeout_seconds * 0.4)
+    phase_two_timeout_seconds = max(0.5, timeout_seconds - phase_one_timeout_seconds)
 
-    # 使用 CBC 求解器，設定 timeout
-    solver_options = [
-        f"-sec {timeout_seconds:.1f}",  # 超時秒數
-        "-threads 8",  # 增加執行緒
-    ]
-    solver = PULP_CBC_CMD(
-        timeLimit=timeout_seconds,
-        threads=8,
-        msg=0,
-        options=solver_options
-    )
+    # Phase 1: maximize the number of scheduled students only.
+    prob += assignment_count, "maximize_assignments"
+    phase_one_status = prob.solve(build_solver(phase_one_timeout_seconds))
 
-    status = prob.solve(solver)
-
-    # 精準求解狀態檢查
-    # - Optimal：找到最優解
-    # - Not Solved：超時但可能有可行解（CBC 特有行為）
-    # - Infeasible：確實無可行解
-    if LpStatus[status] == "Infeasible":
+    if LpStatus[phase_one_status] == "Infeasible":
         print(json.dumps({"error": "MILP 模型無可行解"}))
         return
-    elif LpStatus[status] == "Unbounded":
+    elif LpStatus[phase_one_status] == "Unbounded":
         print(json.dumps({"error": "MILP 模型無界"}))
         return
-    
-    # 檢查是否有可行解（包括 Optimal 和超時但有可行解的情況）
-    has_feasible_solution = prob.status == 1 or any(
-        var.varValue is not None for var in x.values()
-    )
-    
-    if not has_feasible_solution:
-        print(json.dumps({"error": f"MILP 求解失敗：{LpStatus[status]}"}))
+
+    if not has_feasible_solution(phase_one_status, x):
+        print(json.dumps({"error": f"MILP 求解失敗：{LpStatus[phase_one_status]}"}))
         return
+
+    best_assignment_count = int(round(sum((var.varValue or 0) for var in x.values())))
+    phase_one_values = {
+        key: (var.varValue or 0)
+        for key, var in x.items()
+    }
+
+    if enable_two_phase_soft_optimization and soft_penalty_terms:
+        prob += assignment_count == best_assignment_count, "fix_assignment_count_phase_two"
+        prob.setObjective(-lpSum(soft_penalty_terms))
+        phase_two_status = prob.solve(build_solver(phase_two_timeout_seconds))
+        if not has_feasible_solution(phase_two_status, x):
+            for key, var in x.items():
+                var.varValue = phase_one_values[key]
 
     # 提取分配結果
     assignments = []

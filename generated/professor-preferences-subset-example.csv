@@ -1,0 +1,4 @@
+professorId,professorName,preferenceType,weight,target,remark
+P01,,MAX_PER_DAY,9,3,Professor strongly prefers at most 3 presentations per day
+P07,,CONCENTRATE,8,,Prefer to finish within as few days as possible
+P12,,SPREAD,6,,Prefer to distribute presentations across multiple days

@@ -1,17 +1,26 @@
-﻿import React, { useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { ProfPreference, ProfessorOption } from '../types';
 import { ChevronDown } from 'lucide-react';
 import { useI18n } from '../i18n';
 
 interface ProfPreferenceInputProps {
   professorOptions: ProfessorOption[];
+  preferences: Record<string, ProfPreference>;
   onPreferencesChange: (preferences: Record<string, ProfPreference>) => void;
 }
 
-const ProfPreferenceInput: React.FC<ProfPreferenceInputProps> = ({ professorOptions, onPreferencesChange }) => {
+const ProfPreferenceInput: React.FC<ProfPreferenceInputProps> = ({ professorOptions, preferences: externalPreferences, onPreferencesChange }) => {
   const { t } = useI18n();
-  const [preferences, setPreferences] = useState<Record<string, ProfPreference>>({});
+  const [preferences, setPreferences] = useState<Record<string, ProfPreference>>(externalPreferences);
   const [expandedProf, setExpandedProf] = useState<string | null>(null);
+
+  const isDefaultPreference = (preference: ProfPreference): boolean => {
+    return preference.type === 'CONCENTRATE' && preference.weight === 10 && preference.target === undefined;
+  };
+
+  useEffect(() => {
+    setPreferences(externalPreferences);
+  }, [externalPreferences]);
 
   const handlePrefChange = (
     profId: string,
@@ -20,7 +29,16 @@ const ProfPreferenceInput: React.FC<ProfPreferenceInputProps> = ({ professorOpti
     target?: number
   ) => {
     const updated = { ...preferences };
-    updated[profId] = { type, weight, target };
+    const nextPreference: ProfPreference = type === 'MAX_PER_DAY'
+      ? { type, weight, target: target || 3 }
+      : { type, weight };
+
+    if (isDefaultPreference(nextPreference)) {
+      delete updated[profId];
+    } else {
+      updated[profId] = nextPreference;
+    }
+
     setPreferences(updated);
     onPreferencesChange(updated);
   };

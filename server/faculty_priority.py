@@ -155,6 +155,7 @@ def build_professor_priority_context(students):
     context = {}
     for professor_id, professor_name in names_by_id.items():
         normalized_name = normalize_faculty_name(professor_name)
+        # Lower composite ranks indicate higher priority in downstream soft-constraint weighting.
         visual_index = VISUAL_PRIORITY_INDEX.get(normalized_name, len(HKBU_FACULTY_PRIORITY_LEFT_TO_RIGHT) + 100)
         position = POSITION_BY_NORMALIZED_NAME.get(normalized_name, '')
         position_priority = get_faculty_position_priority(position)
@@ -175,6 +176,7 @@ def get_preference_weight(professor_id, prof_preferences, priority_context, prio
     base_weight = int(pref.get('weight', 10) or 10)
     if not prioritize_faculty:
         return base_weight
+    # Faculty priority becomes a tie-breaker by embedding a bonus into the effective soft weight.
     priority_bonus = priority_context.get(professor_id, {}).get('priorityBonus', 0)
     return base_weight * BASE_WEIGHT_SCALE + priority_bonus
 

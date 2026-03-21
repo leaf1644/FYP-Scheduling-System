@@ -71,6 +71,8 @@ const isAvailableCell = (value: unknown): boolean => {
 export type AvailabilityResolveMode = 'containment' | 'overlap';
 export type AvailabilityResolveStrategy = AvailabilityResolveMode | 'inherit-cell';
 
+// Map user-facing cells like "if necessary" into the overlap strategy so coarse
+// professor windows can still match finer room slots.
 const getAvailabilityResolveMode = (
   value: unknown,
   resolveStrategy: AvailabilityResolveStrategy = 'inherit-cell'
@@ -284,6 +286,7 @@ const buildSlotResolvers = (slots: Slot[]) => {
   const slotTimeMeta: SlotTimeMeta[] = [];
 
   slots.forEach((slot) => {
+    // Support both explicit slot IDs and human-readable time labels as lookup keys.
     slotKeyToId[normalizeKey(slot.id)] = slot.id;
     slotKeyToId[normalizeKey(slot.timeLabel)] = slot.id;
 
@@ -306,6 +309,7 @@ const resolveAvailabilityToken = (
   const exactSlotId = slotKeyToId[normalizedToken];
   if (exactSlotId) return [exactSlotId];
 
+  // If the source file stores a time range instead of a direct slot ID, resolve it by containment or overlap.
   const range = parseTimeRange(token);
   if (!range) return [token];
 
@@ -381,6 +385,7 @@ export const deriveSlots = async ({
   roomFile?: File | null;
   availabilityFile?: File | null;
 }): Promise<Slot[]> => {
+  // Slot priority order: explicit slot file, then room schedule, then professor availability headers.
   if (slotsFile) {
     const explicitSlots = await parseSlots(slotsFile);
     if (explicitSlots.length > 0) return explicitSlots;
@@ -407,6 +412,7 @@ export const buildProfessorDirectory = async (file: File): Promise<ProfessorDire
   const aliasToId: Record<string, string> = {};
 
   data.forEach((row) => {
+    // The directory is the bridge that lets the app resolve professor IDs from names or mixed labels.
     const rawProfessorRef = pickValue(row, ['professorId', 'ProfessorId', 'id', 'ID']);
     const resolvedProfessor = resolveProfessorReference(rawProfessorRef, { idToName, aliasToId, options: [] });
     const professorId = resolvedProfessor.id;
@@ -441,6 +447,7 @@ export const parseStudents = async (file: File, professorDirectory?: ProfessorDi
   const data = await parseTabularFile(file);
   return data
     .map((row, index) => {
+      // Resolve both supervisor and observer through the same alias-aware professor directory.
       const supervisor = resolveProfessorReference(
         pickValue(row, ['supervisorId', 'SupervisorId', 'supervisor', 'Supervisor']),
         professorDirectory
@@ -480,6 +487,7 @@ export const parseRooms = async (file: File, slots?: Slot[]): Promise<Room[]> =>
   const headerSet = new Set(headers.map((header) => normalizeHeader(header)));
 
   if (headerSet.has('availableslots')) {
+    // Compact room format: each row already contains a room and its slot IDs.
     return data
       .map((row) => ({
         id: pickValue(row, ['id', 'ID']),
@@ -505,6 +513,7 @@ export const parseRooms = async (file: File, slots?: Slot[]): Promise<Room[]> =>
       pickValue(row, ['observer', 'Observer'])
     );
 
+    // Ignore rows that already contain a scheduled student because they are examples, not available supply.
     if (!roomName || !slotLabel || hasExistingAssignment) return;
 
     const resolvedSlotIds = resolveAvailabilityToken(slotLabel, slotKeyToId, slotTimeMeta);
@@ -545,6 +554,7 @@ export const parseAvailability = async (
     resolveMode: AvailabilityResolveMode = 'containment'
   ) => {
     if (!profId) return;
+    // A single availability token may expand into multiple internal slot IDs.
     const resolvedSlotIds = resolveAvailabilityToken(token, slotKeyToId, slotTimeMeta, resolveMode);
     if (!map[profId]) map[profId] = new Set();
     resolvedSlotIds.forEach((slotId) => map[profId].add(slotId));
@@ -558,6 +568,7 @@ export const parseAvailability = async (
   const isCompactFormat = headerSet.has('availableslots');
 
   if (isCompactFormat) {
+    // Compact professor format: each row stores a professor and a delimited list of slots.
     data.forEach((row) => {
       const profId = resolveProfessorReference(
         pickValue(row, ['professorId', 'ProfessorId', 'id', 'ID']),
@@ -587,6 +598,7 @@ export const parseAvailability = async (
 
     timeColumns.forEach((column) => {
       const cellValue = row[column];
+      // Only truthy availability cells contribute slots to the professor map.
       if (!isAvailableCell(cellValue)) return;
       addResolvedSlots(profId, column, getAvailabilityResolveMode(cellValue, resolveStrategy));
     });
@@ -601,10 +613,24 @@ export const validateData = (
   slots: Slot[],
   profAvailability: Record<string, Set<string>>
 ): ValidationResult => {
+  // Validation here is intentionally stricter than parsing, because empty or inconsistent data
+  // should fail before solver execution rather than degrade into a blank or partial UI state.
   const issues: ValidationIssue[] = [];
   const slotIds = new Set(slots.map((s) => s.id));
   const profIds = new Set(Object.keys(profAvailability));
   const seenSlotIds = new Set<string>();
+
+  if (students.length === 0) {
+    issues.push({ type: 'error', message: '沒有可排程的學生資料。' });
+  }
+
+  if (rooms.length === 0) {
+    issues.push({ type: 'error', message: '沒有可用的房間資料。' });
+  }
+
+  if (slots.length === 0) {
+    issues.push({ type: 'error', message: '沒有可用的時段資料。' });
+  }
 
   slots.forEach((s) => {
     if (seenSlotIds.has(s.id)) {

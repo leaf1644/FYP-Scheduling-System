@@ -8,19 +8,170 @@ import ScheduleDashboard from './components/ScheduleDashboard';
 import { buildProfessorDirectory, deriveSlots, parseStudents, parseRooms, parseAvailability, validateData } from './utils/csvHelper';
 import type { AvailabilityResolveStrategy } from './utils/csvHelper';
 import { generateSchedule, type SolverMode } from './utils/scheduler';
+import { parseProfessorPreferenceFile } from './utils/profPreferenceFile';
 import { Slot, RoomSlot, ScheduleResult, SolvingStatus, ValidationResult, ProfPreference, ProfessorOption } from './types';
 import { I18nProvider, languageOptions, localizeValidationIssue, useI18n } from './i18n';
 
 interface AiAdviceResponse {
   bottleneck_professors?: string[];
   analysis: string;
+  slot_recommendations?: Array<{
+    professor: string;
+    suggested_slots: string[];
+    reason: string;
+  }>;
   suggestions?: string[];
+}
+
+interface FailedAssignmentDiagnostic {
+  studentName: string;
+  supervisorId: string;
+  observerId: string;
+  reason: string;
+  common_slots: string[];
+  blocked_common_slots: string[];
+  suggested_extra_slots_for_supervisor: string[];
+  suggested_extra_slots_for_observer: string[];
+}
+
+interface ProfessorDiagnostic {
+  professorId: string;
+  unscheduledCount: number;
+  reasons: Record<string, number>;
+  suggestedExtraSlots: string[];
 }
 
 const PROF_AVAILABILITY_RESOLVE_STRATEGY: AvailabilityResolveStrategy = 'overlap';
 
+// Convert a partial schedule into concrete AI hints, so the model can reason about
+// specific blocked slots instead of only seeing a generic unscheduled count.
+const buildAiDiagnostics = (
+  schedule: ScheduleResult,
+  allRoomSlots: RoomSlot[],
+  profAvailability: Record<string, Set<string>>
+): { failedAssignments: FailedAssignmentDiagnostic[]; professorDiagnostics: ProfessorDiagnostic[] } => {
+  const slotLabelById = new Map<string, string>();
+  allRoomSlots.forEach((roomSlot) => {
+    // Each logical slot can appear in multiple rooms, so we keep only one label per slotId.
+    if (!slotLabelById.has(roomSlot.slotId)) {
+      slotLabelById.set(roomSlot.slotId, roomSlot.timeLabel);
+    }
+  });
+
+  const availableRoomCountBySlotId = new Map<string, number>();
+  allRoomSlots.forEach((roomSlot) => {
+    availableRoomCountBySlotId.set(roomSlot.slotId, (availableRoomCountBySlotId.get(roomSlot.slotId) || 0) + 1);
+  });
+
+  const occupiedRoomSlotIds = new Set(schedule.assignments.map((assignment) => assignment.roomSlot.id));
+  const freeRoomCountBySlotId = new Map<string, number>();
+  allRoomSlots.forEach((roomSlot) => {
+    if (!occupiedRoomSlotIds.has(roomSlot.id)) {
+      freeRoomCountBySlotId.set(roomSlot.slotId, (freeRoomCountBySlotId.get(roomSlot.slotId) || 0) + 1);
+    }
+  });
+
+  const busyProfessorSlotKeys = new Set<string>();
+  schedule.assignments.forEach((assignment) => {
+    // A professor is considered busy for the whole logical slot regardless of room.
+    busyProfessorSlotKeys.add(`${assignment.student.supervisorId}::${assignment.roomSlot.slotId}`);
+    busyProfessorSlotKeys.add(`${assignment.student.observerId}::${assignment.roomSlot.slotId}`);
+  });
+
+  const failedAssignments = schedule.unscheduled.slice(0, 15).map((unscheduled) => {
+    const student = unscheduled.student;
+    const supervisorSlots = profAvailability[student.supervisorId] || new Set<string>();
+    const observerSlots = profAvailability[student.observerId] || new Set<string>();
+    const commonSlotIds = Array.from(supervisorSlots).filter((slotId) => observerSlots.has(slotId));
+
+    const blockedCommonSlots = commonSlotIds.filter((slotId) => {
+      const hasFreeRoom = (freeRoomCountBySlotId.get(slotId) || 0) > 0;
+      const supervisorBusy = busyProfessorSlotKeys.has(`${student.supervisorId}::${slotId}`);
+      const observerBusy = busyProfessorSlotKeys.has(`${student.observerId}::${slotId}`);
+      return !hasFreeRoom || supervisorBusy || observerBusy;
+    });
+
+    const candidateSupervisorSlots = Array.from(observerSlots)
+      .filter((slotId) => !supervisorSlots.has(slotId) && (freeRoomCountBySlotId.get(slotId) || 0) > 0)
+      .map((slotId) => slotLabelById.get(slotId) || slotId)
+      .slice(0, 5);
+
+    const candidateObserverSlots = Array.from(supervisorSlots)
+      .filter((slotId) => !observerSlots.has(slotId) && (freeRoomCountBySlotId.get(slotId) || 0) > 0)
+      .map((slotId) => slotLabelById.get(slotId) || slotId)
+      .slice(0, 5);
+
+    return {
+      studentName: student.name,
+      supervisorId: student.supervisorId,
+      observerId: student.observerId,
+      reason: unscheduled.reason,
+      common_slots: commonSlotIds.map((slotId) => slotLabelById.get(slotId) || slotId).slice(0, 5),
+      blocked_common_slots: blockedCommonSlots.map((slotId) => slotLabelById.get(slotId) || slotId).slice(0, 5),
+      suggested_extra_slots_for_supervisor: candidateSupervisorSlots,
+      suggested_extra_slots_for_observer: candidateObserverSlots,
+    };
+  });
+
+  const professorAccumulator = new Map<string, { unscheduledCount: number; reasons: Record<string, number>; slotCounts: Map<string, number> }>();
+
+  const ensureProfessor = (professorId: string) => {
+    if (!professorAccumulator.has(professorId)) {
+      professorAccumulator.set(professorId, {
+        unscheduledCount: 0,
+        reasons: {},
+        slotCounts: new Map<string, number>(),
+      });
+    }
+    return professorAccumulator.get(professorId)!;
+  };
+
+  failedAssignments.forEach((item) => {
+    const supervisorStats = ensureProfessor(item.supervisorId);
+    supervisorStats.unscheduledCount += 1;
+    supervisorStats.reasons[item.reason] = (supervisorStats.reasons[item.reason] || 0) + 1;
+    item.suggested_extra_slots_for_supervisor.forEach((slot) => {
+      supervisorStats.slotCounts.set(slot, (supervisorStats.slotCounts.get(slot) || 0) + 1);
+    });
+
+    const observerStats = ensureProfessor(item.observerId);
+    observerStats.unscheduledCount += 1;
+    observerStats.reasons[item.reason] = (observerStats.reasons[item.reason] || 0) + 1;
+    item.suggested_extra_slots_for_observer.forEach((slot) => {
+      observerStats.slotCounts.set(slot, (observerStats.slotCounts.get(slot) || 0) + 1);
+    });
+  });
+
+  const professorDiagnostics = Array.from(professorAccumulator.entries())
+    .map(([professorId, stats]) => ({
+      professorId,
+      unscheduledCount: stats.unscheduledCount,
+      reasons: stats.reasons,
+      suggestedExtraSlots: Array.from(stats.slotCounts.entries())
+        .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+        .slice(0, 5)
+        .map(([slot]) => slot),
+    }))
+    .sort((left, right) => right.unscheduledCount - left.unscheduledCount || left.professorId.localeCompare(right.professorId));
+
+  return { failedAssignments, professorDiagnostics };
+};
+
 const normalizeUiMessage = (message: string, t: (key: string) => string): string => {
+  // Normalize backend and middleware error codes into localized UI messages.
   switch (message) {
+    case 'NO_STUDENTS_FOUND':
+      return t('errors.noStudentsFound');
+    case 'NO_ROOMS_FOUND':
+      return t('errors.noRoomsFound');
+    case 'NO_ROOM_SLOTS_FOUND':
+      return t('errors.noRoomSlotsFound');
+    case 'SCHEDULE_EMPTY_RESULT':
+      return t('errors.emptyScheduleResult');
+    case 'SCHEDULE_INCOMPLETE_RESULT':
+      return t('errors.incompleteScheduleResult');
+    case 'SCHEDULE_MALFORMED_RESULT':
+      return t('errors.malformedScheduleResult');
     case 'CP-SAT 求解失敗':
       return t('errors.scheduleFailed');
     case 'PuLP ILP 求解失敗':
@@ -42,6 +193,7 @@ const AppContent: React.FC = () => {
   const [roomFile, setRoomFile] = useState<File | null>(null);
   const [slotsFile, setSlotsFile] = useState<File | null>(null);
   const [profFile, setProfFile] = useState<File | null>(null);
+  const [profPreferenceFile, setProfPreferenceFile] = useState<File | null>(null);
 
   const [status, setStatus] = useState<SolvingStatus>('idle');
   const [errorMessage, setErrorMessage] = useState<string>('');
@@ -71,6 +223,7 @@ const AppContent: React.FC = () => {
     setRoomFile(null);
     setSlotsFile(null);
     setProfFile(null);
+    setProfPreferenceFile(null);
     setScheduleData(null);
     setValidationResult(null);
     setStatus('idle');
@@ -85,6 +238,7 @@ const AppContent: React.FC = () => {
     setProfFile(file);
     if (file) {
       try {
+        // Build a professor directory early so later student parsing can resolve mixed name/ID references.
         const professorDirectory = await buildProfessorDirectory(file);
         const profsData = await parseAvailability(file, undefined, {
           resolveStrategy: PROF_AVAILABILITY_RESOLVE_STRATEGY,
@@ -92,6 +246,10 @@ const AppContent: React.FC = () => {
         });
         setAvailableProfessors(professorDirectory.options);
         setProfAvailability(profsData);
+        if (profPreferenceFile) {
+          const importedPreferences = await parseProfessorPreferenceFile(profPreferenceFile, professorDirectory.options);
+          setProfPreferences(importedPreferences);
+        }
       } catch (err) {
         console.warn('Could not extract professors from file yet:', err);
         setAvailableProfessors([]);
@@ -100,6 +258,26 @@ const AppContent: React.FC = () => {
       setAvailableProfessors([]);
       setProfPreferences({});
       setProfAvailability({});
+    }
+  };
+
+  const handleProfPreferenceFileSelect = async (file: File | null) => {
+    setProfPreferenceFile(file);
+    if (!file) {
+      setProfPreferences({});
+      return;
+    }
+
+    if (availableProfessors.length === 0) {
+      return;
+    }
+
+    try {
+      const importedPreferences = await parseProfessorPreferenceFile(file, availableProfessors);
+      setProfPreferences(importedPreferences);
+    } catch (err) {
+      console.warn('Could not parse professor preference file yet:', err);
+      setProfPreferences({});
     }
   };
 
@@ -114,7 +292,7 @@ const AppContent: React.FC = () => {
     setValidationResult(null);
 
     try {
-      // 1. Parse Data
+      // 1. Parse raw files into normalized students, slots, rooms, and professor availability.
       const slotsData = await deriveSlots({
         slotsFile,
         roomFile,
@@ -132,10 +310,19 @@ const AppContent: React.FC = () => {
       });
       const studentsData = await parseStudents(studentFile, professorDirectory);
 
+      // Stop early when uploaded files are syntactically valid but semantically empty.
+      if (studentsData.length === 0) {
+        throw new Error('NO_STUDENTS_FOUND');
+      }
+
+      if (roomsData.length === 0) {
+        throw new Error('NO_ROOMS_FOUND');
+      }
+
       setProfAvailability(profsData);
       setAvailableProfessors(professorDirectory.options);
 
-      // 2. Validate Data (Logic Check)
+      // 2. Validate relationships before building room-slot combinations or invoking a solver.
       setStatus('validating');
       const valResult = validateData(studentsData, roomsData, slotsData, profsData);
       setValidationResult(valResult);
@@ -146,7 +333,7 @@ const AppContent: React.FC = () => {
         return;
       }
 
-      // 3. Pre-process Relational Data for Solver
+      // 3. Expand room availability into room-slot nodes used by the solver layer.
       const slotMap = new Map<string, Slot>();
       slotsData.forEach((s) => slotMap.set(s.id, s));
       const generatedRoomSlots: RoomSlot[] = [];
@@ -166,9 +353,13 @@ const AppContent: React.FC = () => {
         });
       });
 
+      if (generatedRoomSlots.length === 0) {
+        throw new Error('NO_ROOM_SLOTS_FOUND');
+      }
+
       setAllRoomSlots(generatedRoomSlots);
 
-      // 4. Solve (Worker) - Pass profPreferences
+      // 4. Send the normalized payload to the selected solver implementation.
       setStatus('solving');
       try {
         const result = await generateSchedule(
@@ -199,18 +390,15 @@ const AppContent: React.FC = () => {
     setIsAskingAi(true);
 
     try {
-      const failedAssignments = scheduleData.unscheduled.slice(0, 15).map((u) => ({
-        supervisorId: u.student.supervisorId,
-        observerId: u.student.observerId,
-        reason: u.reason,
-      }));
+      // Build a richer prompt payload so AI advice can recommend concrete slot openings.
+      const diagnostics = buildAiDiagnostics(scheduleData, allRoomSlots, profAvailability);
 
       const response = await fetch('/api/ai-advice', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ failedAssignments }),
+        body: JSON.stringify(diagnostics),
       });
 
       const data = await response.json().catch(() => ({}));
@@ -305,6 +493,20 @@ const AppContent: React.FC = () => {
 
                 <p className="text-sm text-purple-800 leading-relaxed mb-3">{aiAdvice.analysis}</p>
 
+                {aiAdvice.slot_recommendations && Array.isArray(aiAdvice.slot_recommendations) && aiAdvice.slot_recommendations.length > 0 && (
+                  <div className="mb-3 space-y-2 bg-white/50 p-3 rounded-lg">
+                    {aiAdvice.slot_recommendations.map((item, index) => (
+                      <div key={index} className="text-sm text-purple-900">
+                        <div className="font-semibold">{item.professor}</div>
+                        <div className="text-purple-800">{item.reason}</div>
+                        {item.suggested_slots.length > 0 && (
+                          <div className="text-xs text-purple-700 mt-1">{item.suggested_slots.join(', ')}</div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 {aiAdvice.suggestions && Array.isArray(aiAdvice.suggestions) && (
                   <ul className="list-disc list-inside text-sm text-purple-800 space-y-1 bg-white/50 p-3 rounded-lg">
                     {aiAdvice.suggestions.map((s: string, i: number) => (
@@ -326,6 +528,7 @@ const AppContent: React.FC = () => {
               onReset={handleReset}
               allRoomSlots={allRoomSlots}
               profAvailability={profAvailability}
+              profPreferences={profPreferences}
             />
           </>
         ) : (
@@ -373,11 +576,21 @@ const AppContent: React.FC = () => {
                     file={profFile}
                     onFileSelect={handleProfFileSelect}
                   />
+                  <FileUpload
+                    label={t('uploads.preferences.label')}
+                    description={t('uploads.preferences.description')}
+                    file={profPreferenceFile}
+                    onFileSelect={handleProfPreferenceFileSelect}
+                  />
                 </div>
 
                 {availableProfessors.length > 0 && (
                   <div className="mt-8 pt-6 border-t border-gray-100">
-                    <ProfPreferenceInput professorOptions={availableProfessors} onPreferencesChange={setProfPreferences} />
+                    <ProfPreferenceInput
+                      professorOptions={availableProfessors}
+                      preferences={profPreferences}
+                      onPreferencesChange={setProfPreferences}
+                    />
                   </div>
                 )}
 
@@ -394,6 +607,12 @@ const AppContent: React.FC = () => {
                       <option value="legacy-python">{t('solver.legacy')}</option>
                     </select>
                     <p className="mt-2 text-xs text-gray-500">{t('solver.help')}</p>
+                    {solverMode === 'pulp-ilp' && (
+                      <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                        <p className="text-xs font-semibold text-amber-900">{t('solver.ilpWarning')}</p>
+                        <p className="mt-1 text-xs text-amber-800">{t('solver.ilpRecommendation')}</p>
+                      </div>
+                    )}
                   </div>
                   <button
                     onClick={startProcessing}

@@ -1,7 +1,7 @@
 ﻿// File: fyp-scheduler/components/ScheduleDashboard.tsx
 
 import React, { useMemo, useState, useEffect } from 'react';
-import { ScheduleResult, RoomSlot, Student } from '../types';
+import { ScheduleResult, RoomSlot, Student, ProfPreference } from '../types';
 import { Calendar, Download, AlertTriangle, Briefcase, Edit2, CheckCircle } from 'lucide-react';
 import Papa from 'papaparse';
 import { useI18n } from '../i18n';
@@ -11,6 +11,7 @@ interface Props {
   onReset: () => void;
   allRoomSlots: RoomSlot[];
   profAvailability: Record<string, Set<string>>;
+  profPreferences: Record<string, ProfPreference>;
 }
 
 const looksCorrupted = (text: string): boolean => /[�]/.test(text) || /\?[^\s]{1,3}/.test(text);
@@ -38,7 +39,7 @@ const formatProfessorLabel = (id: string, name?: string): string => {
   return name ? `${id} ${name}` : id;
 };
 
-const ScheduleDashboard: React.FC<Props> = ({ schedule, onReset, allRoomSlots, profAvailability }) => {
+const ScheduleDashboard: React.FC<Props> = ({ schedule, onReset, allRoomSlots, profAvailability, profPreferences }) => {
   const { t } = useI18n();
   const [viewMode, setViewMode] = useState<'time' | 'room' | 'prof'>('time');
   const [assignments, setAssignments] = useState(schedule.assignments);
@@ -72,6 +73,96 @@ const ScheduleDashboard: React.FC<Props> = ({ schedule, onReset, allRoomSlots, p
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
 
+  const preferenceBreakdown = useMemo(() => {
+    const professorStats = new Map<string, { days: Set<string>; dailyLoad: Map<string, number>; totalLoad: number }>();
+
+    const ensureProfessorStats = (professorId: string) => {
+      if (!professorStats.has(professorId)) {
+        professorStats.set(professorId, {
+          days: new Set<string>(),
+          dailyLoad: new Map<string, number>(),
+          totalLoad: 0,
+        });
+      }
+      return professorStats.get(professorId)!;
+    };
+
+    const getDayKey = (timeLabel: string) => {
+      const normalized = String(timeLabel || '').replace(/[–—]/g, '-').trim();
+      const match = normalized.match(/^(.*?)(\d{1,2}(?::\d{2})?\s*(?:am|pm)?\s*-\s*\d{1,2}(?::\d{2})?\s*(?:am|pm)?)$/i);
+      if (match && match[1].trim()) {
+        return match[1].trim();
+      }
+      const dayMatch = normalized.match(/Day\s+\d+/i);
+      return dayMatch?.[0] || normalized;
+    };
+
+    assignments.forEach((assignment) => {
+      const dayKey = getDayKey(assignment.roomSlot.timeLabel);
+
+      [
+        [assignment.student.supervisorId, assignment.student.supervisorName],
+        [assignment.student.observerId, assignment.student.observerName],
+      ].forEach(([professorId]) => {
+        const stats = ensureProfessorStats(String(professorId));
+        stats.days.add(dayKey);
+        stats.totalLoad += 1;
+        stats.dailyLoad.set(dayKey, (stats.dailyLoad.get(dayKey) || 0) + 1);
+      });
+    });
+
+    return Object.entries(profPreferences)
+      .map(([professorId, preference]) => {
+        const stats = professorStats.get(professorId) || {
+          days: new Set<string>(),
+          dailyLoad: new Map<string, number>(),
+          totalLoad: 0,
+        };
+        const usedDays = stats.days.size;
+        const dailyLoads = Array.from(stats.dailyLoad.values());
+        const maxPerDay = dailyLoads.length > 0 ? Math.max(...dailyLoads) : 0;
+        const target = preference.target || 3;
+        const idealDays = Math.ceil(stats.totalLoad / 2);
+
+        let satisfied = true;
+        let summary = '';
+        let penalty = 0;
+
+        if (preference.type === 'CONCENTRATE') {
+          penalty = Math.max(0, usedDays - 1) * preference.weight;
+          satisfied = usedDays <= 1;
+          summary = t('dashboard.prefSummary.concentrate', { usedDays });
+        } else if (preference.type === 'MAX_PER_DAY') {
+          penalty = dailyLoads.reduce((sum, load) => sum + Math.max(0, load - target), 0) * preference.weight;
+          satisfied = maxPerDay <= target;
+          summary = t('dashboard.prefSummary.maxPerDay', { maxPerDay, target });
+        } else {
+          penalty = Math.max(0, idealDays - usedDays) * preference.weight;
+          satisfied = usedDays >= idealDays;
+          summary = t('dashboard.prefSummary.spread', { usedDays, idealDays });
+        }
+
+        return {
+          professorId,
+          professorLabel: professorLabelMap[professorId] || professorId,
+          preference,
+          satisfied,
+          summary,
+          penalty,
+          totalLoad: stats.totalLoad,
+        };
+      })
+      .sort((left, right) => {
+        if (left.satisfied !== right.satisfied) {
+          return left.satisfied ? 1 : -1;
+        }
+        if (left.penalty !== right.penalty) {
+          return right.penalty - left.penalty;
+        }
+        return left.professorLabel.localeCompare(right.professorLabel);
+      });
+  }, [assignments, profPreferences, professorLabelMap, t]);
+
   const groupedData = useMemo(() => {
     const groups: Record<string, typeof assignments> = {};
 
@@ -99,6 +190,9 @@ const ScheduleDashboard: React.FC<Props> = ({ schedule, onReset, allRoomSlots, p
         return obj;
       }, {} as Record<string, typeof assignments>);
   }, [assignments, viewMode]);
+
+  const hasScheduledAssignments = assignments.length > 0;
+  const showEmptyScheduleState = !hasScheduledAssignments;
 
   const availableMoves = useMemo(() => {
     if (!selectedStudent || !isEditMode) return new Set<string>();
@@ -202,6 +296,48 @@ const ScheduleDashboard: React.FC<Props> = ({ schedule, onReset, allRoomSlots, p
               <p className="text-lg font-bold text-blue-900">{schedule.softConstraintCost}</p>
               <p className="text-xs text-blue-600">{t('dashboard.softCostScore')}</p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {preferenceBreakdown.length > 0 && (
+        <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+          <div className="flex items-center justify-between gap-4 mb-4">
+            <div>
+              <p className="text-sm font-semibold text-gray-900">{t('dashboard.prefBreakdown')}</p>
+              <p className="text-xs text-gray-600 mt-0.5">{t('dashboard.prefBreakdownHint')}</p>
+            </div>
+          </div>
+
+          <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+            {preferenceBreakdown.map((item) => (
+              <div
+                key={item.professorId}
+                className={`rounded-lg border p-3 ${item.satisfied ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold text-gray-900">{item.professorLabel}</span>
+                      <span className="text-xs px-2 py-1 rounded bg-white/80 border border-gray-200">{item.preference.type}</span>
+                      <span className="text-xs px-2 py-1 rounded bg-white/80 border border-gray-200">
+                        {t('dashboard.prefWeight', { weight: item.preference.weight })}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-700 mt-1">{item.summary}</p>
+                    <p className="text-xs text-gray-600 mt-1">{t('dashboard.prefLoad', { count: item.totalLoad })}</p>
+                  </div>
+
+                  <div className="text-right min-w-[110px]">
+                    <div className={`inline-flex items-center gap-1 text-sm font-semibold ${item.satisfied ? 'text-emerald-700' : 'text-amber-700'}`}>
+                      {item.satisfied ? <CheckCircle className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
+                      {item.satisfied ? t('dashboard.prefSatisfied') : t('dashboard.prefUnsatisfied')}
+                    </div>
+                    <p className="text-xs text-gray-600 mt-1">{t('dashboard.prefPenalty', { penalty: item.penalty })}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -332,70 +468,84 @@ const ScheduleDashboard: React.FC<Props> = ({ schedule, onReset, allRoomSlots, p
         </div>
 
         <div className="p-6 bg-gray-50/50 min-h-[500px]">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {(Object.entries(groupedData) as Array<[string, typeof assignments]>).map(([groupKey, items]) => {
-              const groupLabel = viewMode === 'prof' ? (professorLabelMap[groupKey] || groupKey) : groupKey;
-              return (
-                <div key={groupKey} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
-                  <div className="bg-indigo-50 px-4 py-3 border-b border-indigo-100 flex justify-between items-center">
-                    <span className="font-bold text-indigo-900 flex items-center gap-2">{groupLabel}</span>
-                    <span className="text-xs bg-white px-2 py-1 rounded text-indigo-600 border border-indigo-100">{items.length}</span>
-                  </div>
-                  <div className="divide-y divide-gray-100">
-                    {items.map((item, idx) => {
-                      const isSup = viewMode === 'prof' && item.student.supervisorId === groupKey;
-                      const isSelected = selectedStudent?.id === item.student.id;
+          {showEmptyScheduleState ? (
+            <div className="h-full min-h-[420px] flex items-center justify-center">
+              <div className="max-w-xl text-center bg-white rounded-2xl border border-amber-200 shadow-sm px-8 py-10">
+                <div className="w-14 h-14 mx-auto rounded-full bg-amber-100 flex items-center justify-center mb-4">
+                  <AlertTriangle className="w-7 h-7 text-amber-600" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900">{t('dashboard.empty.title')}</h3>
+                <p className="mt-3 text-sm text-gray-600 leading-6">
+                  {unscheduled.length > 0 ? t('dashboard.empty.withUnscheduled') : t('dashboard.empty.noData')}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {(Object.entries(groupedData) as Array<[string, typeof assignments]>).map(([groupKey, items]) => {
+                const groupLabel = viewMode === 'prof' ? (professorLabelMap[groupKey] || groupKey) : groupKey;
+                return (
+                  <div key={groupKey} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
+                    <div className="bg-indigo-50 px-4 py-3 border-b border-indigo-100 flex justify-between items-center">
+                      <span className="font-bold text-indigo-900 flex items-center gap-2">{groupLabel}</span>
+                      <span className="text-xs bg-white px-2 py-1 rounded text-indigo-600 border border-indigo-100">{items.length}</span>
+                    </div>
+                    <div className="divide-y divide-gray-100">
+                      {items.map((item, idx) => {
+                        const isSup = viewMode === 'prof' && item.student.supervisorId === groupKey;
+                        const isSelected = selectedStudent?.id === item.student.id;
 
-                      return (
-                        <div
-                          key={idx}
-                          onClick={() => handleStudentClick(item.student)}
-                          className={`
-                            p-4 transition-colors cursor-pointer
-                            ${isSelected ? 'bg-indigo-100 border-l-4 border-indigo-500' : 'hover:bg-gray-50 border-l-4 border-transparent'}
-                          `}
-                        >
-                          <div className="flex justify-between mb-2">
-                            <span className="font-semibold text-gray-800 text-sm">{item.student.name}</span>
-                            <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
-                              {viewMode === 'time' ? item.roomSlot.roomName : item.roomSlot.timeLabel}
-                            </span>
-                          </div>
-                          {viewMode === 'prof' && (
-                            <div className="text-xs mb-2">
-                              <span
-                                className={`px-1.5 py-0.5 rounded text-[10px] ${
-                                  isSup ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'
-                                }`}
-                              >
-                                  {isSup ? t('dashboard.role.supervisor') : t('dashboard.role.observer')}
+                        return (
+                          <div
+                            key={idx}
+                            onClick={() => handleStudentClick(item.student)}
+                            className={`
+                              p-4 transition-colors cursor-pointer
+                              ${isSelected ? 'bg-indigo-100 border-l-4 border-indigo-500' : 'hover:bg-gray-50 border-l-4 border-transparent'}
+                            `}
+                          >
+                            <div className="flex justify-between mb-2">
+                              <span className="font-semibold text-gray-800 text-sm">{item.student.name}</span>
+                              <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+                                {viewMode === 'time' ? item.roomSlot.roomName : item.roomSlot.timeLabel}
                               </span>
                             </div>
-                          )}
-                          <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
-                            <div
-                              className={
-                                viewMode === 'prof' && item.student.supervisorId === groupKey ? 'font-bold text-orange-700' : ''
-                              }
-                            >
-                              {t('dashboard.shortSupervisor')}: {formatProfessorLabel(item.student.supervisorId, item.student.supervisorName)}
-                            </div>
-                            <div
-                              className={
-                                viewMode === 'prof' && item.student.observerId === groupKey ? 'font-bold text-blue-700' : ''
-                              }
-                            >
-                              {t('dashboard.shortObserver')}: {formatProfessorLabel(item.student.observerId, item.student.observerName)}
+                            {viewMode === 'prof' && (
+                              <div className="text-xs mb-2">
+                                <span
+                                  className={`px-1.5 py-0.5 rounded text-[10px] ${
+                                    isSup ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'
+                                  }`}
+                                >
+                                    {isSup ? t('dashboard.role.supervisor') : t('dashboard.role.observer')}
+                                </span>
+                              </div>
+                            )}
+                            <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
+                              <div
+                                className={
+                                  viewMode === 'prof' && item.student.supervisorId === groupKey ? 'font-bold text-orange-700' : ''
+                                }
+                              >
+                                {t('dashboard.shortSupervisor')}: {formatProfessorLabel(item.student.supervisorId, item.student.supervisorName)}
+                              </div>
+                              <div
+                                className={
+                                  viewMode === 'prof' && item.student.observerId === groupKey ? 'font-bold text-blue-700' : ''
+                                }
+                              >
+                                {t('dashboard.shortObserver')}: {formatProfessorLabel(item.student.observerId, item.student.observerName)}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
 
           {isEditMode && selectedStudent && (
             <div className="fixed bottom-6 right-6 w-80 bg-white rounded-xl shadow-2xl border border-indigo-200 overflow-hidden flex flex-col max-h-[400px]">
