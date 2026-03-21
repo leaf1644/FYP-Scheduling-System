@@ -1,5 +1,6 @@
 import { Student, RoomSlot, ScheduleResult, ProfPreference } from '../types';
 import SchedulerWorker from './scheduler.worker?worker';
+import { normalizeScheduleResult } from './scheduleResult';
 
 export type SolverMode = 'cp-sat' | 'pulp-ilp' | 'legacy-python';
 
@@ -19,6 +20,7 @@ interface SolverPayload {
 const toSafeAvailability = (profAvailability: Record<string, Set<string>>): Record<string, string[]> => {
   const safeAvailability: Record<string, string[]> = {};
   Object.entries(profAvailability).forEach(([professorId, slots]) => {
+    // Workers and HTTP payloads need plain arrays instead of Set objects.
     safeAvailability[professorId] = Array.from(slots);
   });
   return safeAvailability;
@@ -32,7 +34,12 @@ const runLegacySolver = (payload: SolverPayload): Promise<ScheduleResult> => {
       if (event.data.error) {
         reject(new Error(event.data.error));
       } else {
-        resolve(event.data);
+        try {
+          // Normalize worker output so malformed results surface as errors instead of blank dashboards.
+          resolve(normalizeScheduleResult(event.data, payload.students.length));
+        } catch (error) {
+          reject(error);
+        }
       }
       worker.terminate();
     };
@@ -60,7 +67,7 @@ const runCpSatSolver = async (payload: SolverPayload): Promise<ScheduleResult> =
     throw new Error(data?.error || 'CP-SAT 求解失敗');
   }
 
-  return data as ScheduleResult;
+  return normalizeScheduleResult(data, payload.students.length);
 };
 
 const runPulpSolver = async (payload: SolverPayload): Promise<ScheduleResult> => {
@@ -77,7 +84,7 @@ const runPulpSolver = async (payload: SolverPayload): Promise<ScheduleResult> =>
     throw new Error(data?.error || 'PuLP ILP 求解失敗');
   }
 
-  return data as ScheduleResult;
+  return normalizeScheduleResult(data, payload.students.length);
 };
 
 const runLegacyPythonSolver = async (payload: SolverPayload): Promise<ScheduleResult> => {
@@ -94,7 +101,7 @@ const runLegacyPythonSolver = async (payload: SolverPayload): Promise<ScheduleRe
     throw new Error(data?.error || 'Legacy Python 求解失敗');
   }
 
-  return data as ScheduleResult;
+  return normalizeScheduleResult(data, payload.students.length);
 };
 
 export const generateSchedule = async (
@@ -104,6 +111,7 @@ export const generateSchedule = async (
   profPreferences?: Record<string, ProfPreference>,
   options?: GenerateScheduleOptions
 ): Promise<ScheduleResult> => {
+  // Every solver receives the same normalized payload shape so the UI can swap modes safely.
   const payload: SolverPayload = {
     students,
     allRoomSlots,
@@ -122,6 +130,7 @@ export const generateSchedule = async (
       try {
         return await runCpSatSolver(payload);
       } catch (error) {
+        // When the Python API is unavailable, fall back to the in-browser worker to keep the app usable.
         console.warn('Selected Python solver unavailable, falling back to legacy worker.', error);
         return runLegacySolver(payload);
       }

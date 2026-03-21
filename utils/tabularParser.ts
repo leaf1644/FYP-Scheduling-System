@@ -17,30 +17,38 @@ const isExcelFile = (file: File): boolean => /\.(xlsx|xls)$/i.test(file.name);
 
 const parseCsvRows = (file: File): Promise<TabularRow[]> => {
   return new Promise((resolve, reject) => {
-    Papa.parse<TabularRow>(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: (results) => {
-        const rows = (results.data || []).map((row) => normalizeRowKeys(row));
-        resolve(rows);
-      },
-      error: (error) => reject(error),
-    });
+    file.text()
+      .then((content) => {
+        Papa.parse<TabularRow>(content, {
+          header: true,
+          skipEmptyLines: true,
+          complete: (results) => {
+            const rows = (results.data || []).map((row) => normalizeRowKeys(row));
+            resolve(rows);
+          },
+          error: (error) => reject(error),
+        });
+      })
+      .catch(reject);
   });
 };
 
 const parseCsvHeaders = (file: File): Promise<string[]> => {
   return new Promise((resolve, reject) => {
-    Papa.parse(file, {
-      header: true,
-      preview: 1,
-      skipEmptyLines: true,
-      complete: (results) => {
-        const headers = (results.meta.fields || []).map((h) => normalizeHeaderName(h));
-        resolve(headers);
-      },
-      error: (error) => reject(error),
-    });
+    file.text()
+      .then((content) => {
+        Papa.parse(content, {
+          header: true,
+          preview: 1,
+          skipEmptyLines: true,
+          complete: (results) => {
+            const headers = (results.meta.fields || []).map((h) => normalizeHeaderName(h));
+            resolve(headers);
+          },
+          error: (error) => reject(error),
+        });
+      })
+      .catch(reject);
   });
 };
 
