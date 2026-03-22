@@ -8,3 +8,4 @@ resources/solvers/
 .pyinstaller-test-*/
 .python-runtime-test/
 .solver-venv/
+.env
