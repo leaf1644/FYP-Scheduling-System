@@ -1,0 +1,10 @@
+node_modules/
+release/
+app-dist/
+resources/python-runtime/
+resources/solvers/
+.pyinstaller/
+.pyinstaller-test/
+.pyinstaller-test-*/
+.python-runtime-test/
+.solver-venv/
