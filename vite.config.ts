@@ -1,5 +1,6 @@
+import fs from 'node:fs';
 import path from 'path';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
@@ -53,6 +54,49 @@ const sendJson = (res: ServerResponse, statusCode: number, payload: unknown) => 
   res.statusCode = statusCode;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.end(JSON.stringify(payload));
+};
+
+const pythonRuntimeCheckCache = new Map<string, boolean>();
+
+const hasRequiredSolverPackages = (pythonBin: string) => {
+  if (pythonRuntimeCheckCache.has(pythonBin)) {
+    return pythonRuntimeCheckCache.get(pythonBin) || false;
+  }
+
+  const probe = spawnSync(
+    pythonBin,
+    ['-c', 'import ortools, pulp'],
+    {
+      stdio: 'ignore',
+      windowsHide: true,
+    }
+  );
+
+  const isValid = !probe.error && probe.status === 0;
+  pythonRuntimeCheckCache.set(pythonBin, isValid);
+  return isValid;
+};
+
+const resolvePythonBin = (env: Record<string, string | undefined>) => {
+  const candidates = [
+    env.PYTHON_BIN,
+    path.resolve(__dirname, '.venv', 'Scripts', 'python.exe'),
+    path.resolve(__dirname, 'desktop', '.solver-venv', 'Scripts', 'python.exe'),
+    'python',
+  ].filter((candidate): candidate is string => Boolean(candidate));
+
+  for (const candidate of candidates) {
+    const isFilePath = candidate.includes('\\') || candidate.includes('/') || candidate.toLowerCase().endsWith('.exe');
+    if (isFilePath && !fs.existsSync(candidate)) {
+      continue;
+    }
+
+    if (hasRequiredSolverPackages(candidate)) {
+      return candidate;
+    }
+  }
+
+  return 'python';
 };
 
 const buildPrompt = (failedAssignments: AdviceRequestBody['failedAssignments'] = [], professorDiagnostics: AdviceRequestBody['professorDiagnostics'] = []) => {
@@ -367,7 +411,7 @@ export default defineConfig(({ mode }) => {
       ? (env.HKBU_GENAI_BASE_URL || 'https://genai.hkbu.edu.hk/api/v0/rest')
       : undefined,
   });
-  const pythonBin = env.PYTHON_BIN || 'python';
+  const pythonBin = resolvePythonBin(env);
   const cpSatScriptPath = path.resolve(__dirname, 'server', 'solver_cp_sat_optimized.py');
   const pulpScriptPath = path.resolve(__dirname, 'server', 'solver_pulp_ilp.py');
   const legacyPythonScriptPath = path.resolve(__dirname, 'server', 'legacy_solver.py');

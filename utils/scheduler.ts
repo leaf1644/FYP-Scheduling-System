@@ -132,7 +132,13 @@ export const generateSchedule = async (
       } catch (error) {
         // When the Python API is unavailable, fall back to the in-browser worker to keep the app usable.
         console.warn('Selected Python solver unavailable, falling back to legacy worker.', error);
-        return runLegacySolver(payload);
+        try {
+          return await runLegacySolver(payload);
+        } catch (workerError) {
+          const primaryMessage = error instanceof Error ? error.message : 'CP-SAT 求解失敗';
+          const fallbackMessage = workerError instanceof Error ? workerError.message : 'Unknown worker error';
+          throw new Error(`${primaryMessage}; legacy fallback failed: ${fallbackMessage}`);
+        }
       }
   }
 };
