@@ -3,8 +3,8 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { ScheduleResult, RoomSlot, Student, ProfPreference } from '../types';
 import { Calendar, Download, AlertTriangle, Briefcase, Edit2, CheckCircle } from 'lucide-react';
-import Papa from 'papaparse';
 import { useI18n } from '../i18n';
+import { createFinalScheduleCsvBlob, FINAL_SCHEDULE_CSV_FILENAME } from '../utils/finalScheduleCsv';
 
 interface Props {
   schedule: ScheduleResult;
@@ -75,6 +75,7 @@ const ScheduleDashboard: React.FC<Props> = ({ schedule, onReset, allRoomSlots, p
 
   const preferenceBreakdown = useMemo(() => {
     const professorStats = new Map<string, { days: Set<string>; dailyLoad: Map<string, number>; totalLoad: number }>();
+    const preferenceEntries = Object.entries(profPreferences) as Array<[string, ProfPreference]>;
 
     const ensureProfessorStats = (professorId: string) => {
       if (!professorStats.has(professorId)) {
@@ -111,7 +112,7 @@ const ScheduleDashboard: React.FC<Props> = ({ schedule, onReset, allRoomSlots, p
       });
     });
 
-    return Object.entries(profPreferences)
+    return preferenceEntries
       .map(([professorId, preference]) => {
         const stats = professorStats.get(professorId) || {
           days: new Set<string>(),
@@ -246,32 +247,14 @@ const ScheduleDashboard: React.FC<Props> = ({ schedule, onReset, allRoomSlots, p
   };
 
   const handleDownloadCSV = () => {
-    const csvData = assignments.map((s) => ({
-      Status: t('dashboard.csv.scheduled'),
-      Time: s.roomSlot.timeLabel,
-      Room: s.roomSlot.roomName,
-      Student: s.student.name,
-      Supervisor: formatProfessorLabel(s.student.supervisorId, s.student.supervisorName),
-      Observer: formatProfessorLabel(s.student.observerId, s.student.observerName),
-    }));
-
-    unscheduled.forEach((u) => {
-      csvData.push({
-        Status: t('dashboard.csv.unscheduled'),
-        Time: '',
-        Room: '',
-        Student: u.student.name,
-        Supervisor: formatProfessorLabel(u.student.supervisorId, u.student.supervisorName),
-        Observer: formatProfessorLabel(u.student.observerId, u.student.observerName),
-      });
+    const blob = createFinalScheduleCsvBlob(assignments, unscheduled, {
+      scheduled: t('dashboard.csv.scheduled'),
+      unscheduled: t('dashboard.csv.unscheduled'),
     });
-
-    const csv = Papa.unparse(csvData);
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', 'fyp_schedule_final.csv');
+    link.setAttribute('download', FINAL_SCHEDULE_CSV_FILENAME);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
