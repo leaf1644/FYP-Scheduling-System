@@ -24,6 +24,12 @@ ILP_TWO_PHASE_MAX_PREFERENCE_COUNT = 8
 
 
 def read_payload():
+    """Read the normalized scheduling payload from stdin.
+
+    The frontend already prepares a common JSON structure for every solver. This
+    helper only needs to deserialize that JSON into a Python dictionary. If stdin
+    is empty, it returns an empty payload so the caller can fail gracefully.
+    """
     raw = sys.stdin.read()
     if not raw.strip():
         return {}
@@ -31,6 +37,12 @@ def read_payload():
 
 
 def get_date_from_slot(label: str) -> str:
+    """Extract the day portion from a slot label.
+
+    Soft preferences are evaluated at the day level, not the exact minute-level
+    room-slot level. This function removes the trailing time range and keeps only
+    the date or logical day prefix, such as "10 April (Fri)" or "Day 2".
+    """
     normalized = re.sub(r"[–—]", "-", label).strip()
     match = re.match(
         r"^(.*?)(\d{1,2}(?::\d{2})?\s*(?:am|pm)?\s*-\s*\d{1,2}(?::\d{2})?\s*(?:am|pm)?)$",
@@ -48,6 +60,12 @@ def get_date_from_slot(label: str) -> str:
 
 
 def calculate_soft_cost(assignments, students, prof_preferences, professor_priority_context):
+    """Compute the weighted soft-preference penalty of a finished schedule.
+
+    The solver optimizes internally using MILP variables, but the UI only needs a
+    summary score for the produced schedule. This helper converts assignments into
+    day-based records and passes them to the shared faculty-priority utility.
+    """
     assignment_records = [
         {
             "student": assignment["student"],
@@ -64,6 +82,12 @@ def calculate_soft_cost(assignments, students, prof_preferences, professor_prior
 
 
 def build_solver(timeout_seconds):
+    """Create the CBC backend with the chosen runtime settings.
+
+    The ILP model is solved through PuLP using the CBC backend. This helper keeps
+    all solver runtime parameters in one place, including time limit and thread
+    count, so both optimization phases behave consistently.
+    """
     solver_options = [
         f"-sec {timeout_seconds:.1f}",
         "-threads 8",
@@ -77,18 +101,43 @@ def build_solver(timeout_seconds):
 
 
 def has_feasible_solution(status, variables):
+    """Check whether CBC produced a usable schedule solution.
+
+    Solver status strings alone are not always enough for the UI. This helper
+    treats the result as usable if the status is acceptable or if at least one
+    decision variable received a value, unless the model is explicitly infeasible
+    or unbounded.
+    """
     if LpStatus[status] in ("Infeasible", "Unbounded"):
         return False
     return status == 1 or any(var.varValue is not None for var in variables.values())
 
 
 def should_enable_two_phase_soft_optimization(students, assignment_variable_count, preference_count):
+    """Decide whether the soft-optimization second phase is affordable.
+
+    Two-phase optimization improves preference quality, but on very large ILP
+    models it can become too expensive. This gate keeps the second phase enabled
+    only when the number of students, assignment variables, and preferences stays
+    within practical limits.
+    """
     if preference_count <= ILP_TWO_PHASE_MAX_PREFERENCE_COUNT:
         return True
     return len(students) <= ILP_TWO_PHASE_MAX_STUDENTS and assignment_variable_count <= ILP_TWO_PHASE_MAX_ASSIGNMENT_VARIABLES
 
 
 def main():
+    """Build and solve the scheduling problem as a binary ILP model.
+
+    High-level flow:
+    1. Read normalized payload.
+    2. Build feasible domains and binary decision variables.
+    3. Add hard linear constraints.
+    4. Build optional soft-penalty variables and constraints.
+    5. Run phase one to maximize coverage.
+    6. Optionally run phase two to improve preference quality.
+    7. Convert selected binary variables into assignments and unscheduled cases.
+    """
     payload = read_payload()
     students = payload.get("students", [])
     all_room_slots = payload.get("allRoomSlots", [])
@@ -106,7 +155,7 @@ def main():
     # 建立 MILP 模型
     prob = LpProblem("scheduling_problem", LpMaximize)
 
-    # 決策變數：x[i][j] = 1 如果學生 i 分配到房間時段 j
+    # Decision variables: x[i, j] = 1 means student i is assigned to room-slot j.
     x = {}
     student_domains = []
     professor_day_to_vars = defaultdict(list)
@@ -116,6 +165,8 @@ def main():
     }
     all_days = sorted(set(slot_day_by_slot_id.values()))
 
+    # Step 1: Build the feasible domain for every student by keeping only the
+    # room-slots where both the supervisor and observer are available.
     for student_index, student in enumerate(students):
         sup_slots = set(prof_availability.get(student["supervisorId"], []))
         obs_slots = set(prof_availability.get(student["observerId"], []))
@@ -125,7 +176,7 @@ def main():
             room_slot_id = room_slot["slotId"]
             if room_slot_id in sup_slots and room_slot_id in obs_slots:
                 domain.append(room_slot_index)
-                # 創建二元變數
+                # Create one binary variable for this feasible assignment pair.
                 var_name = f"x_{student_index}_{room_slot_index}"
                 x[(student_index, room_slot_index)] = LpVariable(var_name, cat="Binary")
                 day = slot_day_by_slot_id.get(room_slot_id, room_slot.get("timeLabel", ""))
@@ -136,14 +187,14 @@ def main():
 
     assignment_count = lpSum([x[key] for key in x.keys()])
 
-    # 硬約束 1: 每個學生最多被分配到一個時段
+    # Hard constraint A: each student can be assigned to at most one slot.
     for student_index in range(len(students)):
         vars_for_student = [x[(student_index, room_slot_index)] 
                            for room_slot_index in student_domains[student_index]]
         if vars_for_student:
             prob += lpSum(vars_for_student) <= 1, f"max_one_slot_per_student_{student_index}"
 
-    # 硬約束 2: 每個房間時段最多被分配一個學生
+    # Hard constraint B: each room-slot can host at most one student.
     room_slot_to_vars = defaultdict(list)
     for (student_index, room_slot_index), var in x.items():
         room_slot_to_vars[room_slot_index].append(var)
@@ -151,7 +202,8 @@ def main():
     for room_slot_index, vars_for_room_slot in room_slot_to_vars.items():
         prob += lpSum(vars_for_room_slot) <= 1, f"max_one_student_per_slot_{room_slot_index}"
 
-    # 硬約束 3: 教授可用性與時段衝突
+    # Hard constraint C: a professor cannot appear in more than one presentation
+    # in the same logical slot.
     professor_slot_to_vars = {}
     for (student_index, room_slot_index), var in x.items():
         student = students[student_index]
@@ -180,6 +232,8 @@ def main():
     soft_penalty_terms = []
     soft_penalty_upper_bound = 0
     if enable_two_phase_soft_optimization:
+        # Soft penalties do not affect validity. They only decide which valid
+        # schedule is preferable when there are multiple feasible solutions.
         professor_loads = count_professor_student_loads(students)
         for professor_id, pref in prof_preferences.items():
             pref_type = pref.get("type", "CONCENTRATE")
@@ -191,6 +245,8 @@ def main():
             )
 
             day_used_vars = []
+            # day_used is a binary helper variable that becomes 1 when the
+            # professor is used at least once on that day.
             for day in all_days:
                 day_vars = professor_day_to_vars.get((professor_id, day), [])
                 if not day_vars:
@@ -202,6 +258,7 @@ def main():
                     prob += day_used >= var, f"day_used_lower_{professor_id}_{abs(hash(day))}_{index}"
 
             if pref_type == "CONCENTRATE":
+                # Penalize using too many different days for the same professor.
                 if day_used_vars:
                     extra_days = LpVariable(f"extra_days_{professor_id}", lowBound=0, upBound=len(day_used_vars), cat="Integer")
                     prob += extra_days >= lpSum(day_used_vars) - 1, f"extra_days_lb_{professor_id}"
@@ -210,6 +267,7 @@ def main():
                 continue
 
             if pref_type == "MAX_PER_DAY":
+                # Penalize any number of assignments above the professor's daily limit.
                 limit = int(pref.get("target", 3) or 3)
                 for day in all_days:
                     day_vars = professor_day_to_vars.get((professor_id, day), [])
@@ -224,6 +282,8 @@ def main():
                     soft_penalty_upper_bound += max_excess * effective_weight
                 continue
 
+            # SPREAD rewards using enough days by penalizing shortage in the
+            # effective number of active days for that professor.
             total_load_expr = lpSum(
                 var
                 for (student_index, _room_slot_index), var in x.items()
@@ -263,6 +323,8 @@ def main():
         for key, var in x.items()
     }
 
+    # Phase 2: keep the best coverage fixed and optimize preference quality.
+    # If this second phase fails, fall back to the phase-one solution values.
     if enable_two_phase_soft_optimization and soft_penalty_terms:
         prob += assignment_count == best_assignment_count, "fix_assignment_count_phase_two"
         prob.setObjective(-lpSum(soft_penalty_terms))
@@ -271,7 +333,7 @@ def main():
             for key, var in x.items():
                 var.varValue = phase_one_values[key]
 
-    # 提取分配結果
+    # Convert selected binary variables into concrete assignment records.
     assignments = []
     assigned_students = set()
 
@@ -283,7 +345,7 @@ def main():
                 "roomSlot": all_room_slots[room_slot_index],
             })
 
-    # 生成未排程學生清單
+    # Build explicit unscheduled explanations so the UI can show a complete result.
     unscheduled = []
     for student_index, student in enumerate(students):
         if student_index in assigned_students:
@@ -302,7 +364,7 @@ def main():
                 "details": "可用時段已被其他安排占用，或教授在同時段有衝堂。",
             })
 
-    # 輸出結果（與原有 solver 格式相容）
+    # Keep the output contract aligned with the other solver backends.
     result = {
         "success": len(unscheduled) == 0,
         "assignments": assignments,

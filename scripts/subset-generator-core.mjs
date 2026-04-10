@@ -2,6 +2,61 @@ import path from 'node:path';
 import { promises as fs } from 'node:fs';
 import XLSX from 'xlsx';
 
+/** @typedef {Record<string, string>} SubsetRow */
+
+/**
+ * @typedef {Object} SubsetOptions
+ * @property {number} [count]
+ * @property {number} [fraction]
+ * @property {string} [strategy]
+ * @property {number} [seed]
+ * @property {boolean} [keepAllProfessors]
+ * @property {number} [roomSlotCount]
+ * @property {number} [roomSlotFraction]
+ * @property {string} [roomSlotStrategy]
+ * @property {number} [roomSlotSeed]
+ */
+
+/**
+ * @typedef {Object} SubsetTable
+ * @property {SubsetRow[]} rows
+ * @property {string[]} headers
+ */
+
+/**
+ * @typedef {Object} SubsetMetadata
+ * @property {string} selectionStrategy
+ * @property {boolean} keepAllProfessors
+ * @property {number | null} requestedCount
+ * @property {number | null} requestedFraction
+ * @property {number | null} requestedRoomSlotCount
+ * @property {number | null} requestedRoomSlotFraction
+ * @property {number} selectedStudentCount
+ * @property {string[]} selectedProfessorIds
+ * @property {string[]} selectedSlotTokens
+ * @property {number} roomRowCount
+ * @property {number} availabilityRowCount
+ * @property {number} slotRowCount
+ */
+
+/**
+ * @typedef {Object} CreateSubsetDataParams
+ * @property {SubsetRow[]} studentRows
+ * @property {SubsetRow[]} availabilityRows
+ * @property {SubsetRow[]} roomRows
+ * @property {SubsetRow[]} [slotRows]
+ * @property {SubsetOptions} [options]
+ */
+
+/**
+ * @typedef {Object} CreateSubsetDataResult
+ * @property {SubsetTable} students
+ * @property {SubsetTable} availability
+ * @property {SubsetTable} rooms
+ * @property {SubsetTable} slots
+ * @property {SubsetMetadata} metadata
+ */
+
 const STUDENT_SUPERVISOR_ALIASES = ['supervisorId', 'SupervisorId', 'supervisor', 'Supervisor'];
 const STUDENT_OBSERVER_ALIASES = ['observerId', 'ObserverId', 'observer', 'Observer'];
 const PROFESSOR_ID_ALIASES = ['professorId', 'ProfessorId', 'id', 'ID'];
@@ -520,6 +575,10 @@ const filterSlotRows = (slotRows, relevantSlots) => {
   return { rows: filteredRows, headers };
 };
 
+/**
+ * @param {CreateSubsetDataParams} params
+ * @returns {CreateSubsetDataResult}
+ */
 export const createSubsetData = ({
   studentRows,
   availabilityRows,

@@ -19,15 +19,12 @@ const parseCsvRows = (file: File): Promise<TabularRow[]> => {
   return new Promise((resolve, reject) => {
     file.text()
       .then((content) => {
-        Papa.parse<TabularRow>(content, {
+        const results = Papa.parse<TabularRow>(content, {
           header: true,
           skipEmptyLines: true,
-          complete: (results) => {
-            const rows = (results.data || []).map((row) => normalizeRowKeys(row));
-            resolve(rows);
-          },
-          error: (error) => reject(error),
         });
+        const rows = (results.data || []).map((row) => normalizeRowKeys(row));
+        resolve(rows);
       })
       .catch(reject);
   });
@@ -37,16 +34,13 @@ const parseCsvHeaders = (file: File): Promise<string[]> => {
   return new Promise((resolve, reject) => {
     file.text()
       .then((content) => {
-        Papa.parse(content, {
+        const results = Papa.parse<TabularRow>(content, {
           header: true,
           preview: 1,
           skipEmptyLines: true,
-          complete: (results) => {
-            const headers = (results.meta.fields || []).map((h) => normalizeHeaderName(h));
-            resolve(headers);
-          },
-          error: (error) => reject(error),
         });
+        const headers = (results.meta.fields || []).map((h) => normalizeHeaderName(h));
+        resolve(headers);
       })
       .catch(reject);
   });
