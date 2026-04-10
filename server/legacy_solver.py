@@ -9,6 +9,11 @@ from functools import cmp_to_key
 from faculty_priority import build_professor_priority_context, calculate_weighted_soft_cost
 
 def read_payload():
+    """Read the normalized scheduling payload from stdin.
+
+    All solver backends receive the same frontend payload shape. This helper only
+    deserializes that JSON and returns an empty object when stdin is empty.
+    """
     raw = sys.stdin.read()
     if not raw.strip():
         return {}
@@ -16,6 +21,11 @@ def read_payload():
 
 
 def get_date_from_slot(label: str) -> str:
+    """Extract the day label from a slot string for preference evaluation.
+
+    The legacy solver optimizes soft preferences at the day level. This helper
+    removes the trailing time range and keeps only the date or logical day part.
+    """
     normalized = re.sub(r"[–—]", "-", label).strip()
     match = re.match(
         r"^(.*?)(\d{1,2}(?::\d{2})?\s*(?:am|pm)?\s*-\s*\d{1,2}(?::\d{2})?\s*(?:am|pm)?)$",
@@ -33,6 +43,12 @@ def get_date_from_slot(label: str) -> str:
 
 
 def calculate_soft_cost(assignments, students, prof_preferences, professor_priority_context, prioritize_faculty=False):
+    """Compute the current soft-preference cost of heuristic assignments.
+
+    The legacy solver uses this score during local improvement. It converts the
+    current assignment set into simplified day-based records and then calls the
+    shared faculty-priority helper.
+    """
     if not prof_preferences:
         return None
 
@@ -54,20 +70,33 @@ def calculate_soft_cost(assignments, students, prof_preferences, professor_prior
 
 
 def get_static_domain(student, all_room_slots, prof_availability):
+    """Build the feasible room-slot domain for one student.
+
+    A room-slot is kept only when both the supervisor and observer are available
+    in that logical slot. This domain becomes the search space used by all later
+    heuristic stages.
+    """
     sup_slots = set(prof_availability.get(student["supervisorId"], []))
     obs_slots = set(prof_availability.get(student["observerId"], []))
     return [room for room in all_room_slots if room["slotId"] in sup_slots and room["slotId"] in obs_slots]
 
 
 def has_timed_out(start_time, timeout_ms):
+    """Return whether the current heuristic search exceeded the time budget."""
     return time.time() - start_time > timeout_ms / 1000.0
 
 
 def clone_assignments(assignments):
+    """Deep-copy assignments so heuristic branches can backtrack safely."""
     return deepcopy(assignments)
 
 
 def get_blocking_student_indices(ctx, assignments, student_index, candidate):
+    """Find which existing assignments would conflict with a candidate slot.
+
+    Conflicts come from either reusing the same room-slot or putting shared
+    professors into two presentations at the same logical slot.
+    """
     blockers = set()
     student = ctx["students"][student_index]["student"]
     for idx, assignment in enumerate(assignments):
@@ -88,10 +117,17 @@ def get_blocking_student_indices(ctx, assignments, student_index, candidate):
 
 
 def is_valid_move(ctx, student_index, candidate):
+    """Check whether assigning a student to a candidate slot is conflict-free."""
     return len(get_blocking_student_indices(ctx, ctx["assignments"], student_index, candidate)) == 0
 
 
 def compare_candidate_slots(ctx, assignments, student_index, left, right, randomize=False):
+    """Rank candidate slots for heuristic selection.
+
+    The ordering prefers slots with fewer blockers, then lower demand pressure.
+    If randomization is enabled, a random tie-break is injected so multi-start
+    search can explore different schedules.
+    """
     left_blockers = len(get_blocking_student_indices(ctx, assignments, student_index, left))
     right_blockers = len(get_blocking_student_indices(ctx, assignments, student_index, right))
     if left_blockers != right_blockers:
@@ -119,6 +155,11 @@ def compare_candidate_slots(ctx, assignments, student_index, left, right, random
 
 
 def forward_check(ctx, current_index, candidate):
+    """Prune choices that would leave neighboring students with no future slot.
+
+    This is a classic forward-checking heuristic used during backtracking. It is
+    cheaper than full lookahead but still prevents many dead-end branches.
+    """
     current_student = ctx["students"][current_index]["student"]
     for neighbor_idx in ctx["conflict_graph"][current_index]:
         if ctx["assignments"][neighbor_idx] is not None:
@@ -139,6 +180,12 @@ def forward_check(ctx, current_index, candidate):
 
 
 def solve_strict(ctx, student_order, depth):
+    """Try to find a complete schedule via recursive backtracking.
+
+    Students are processed in a heuristic order. For each student, the solver
+    tries feasible slots, checks immediate conflicts, applies forward checking,
+    and backtracks if the partial assignment cannot be completed.
+    """
     if depth % 40 == 0 and has_timed_out(ctx["start_time"], ctx["timeout_ms"]):
         return False
     if depth == len(student_order):
@@ -165,6 +212,12 @@ def solve_strict(ctx, student_order, depth):
 
 
 def solve_greedy_pass(ctx, student_order, randomize=False):
+    """Build a schedule greedily using the slot ranking heuristic.
+
+    This is the first fallback when strict backtracking fails. It places each
+    student into the first currently valid slot in the ranked list and records
+    any students that still cannot be assigned.
+    """
     ctx["assignments"] = [None] * len(ctx["students"])
     unscheduled = []
     for idx in student_order:
@@ -184,6 +237,12 @@ def solve_greedy_pass(ctx, student_order, randomize=False):
 
 
 def perturb_student_order(ctx, base_order):
+    """Randomly perturb the student order for multi-start search.
+
+    The legacy solver explores multiple greedy runs with slightly different input
+    orders. This helps it escape deterministic local patterns and sometimes find
+    better coverage.
+    """
     shuffled = base_order[:]
     for i in range(len(shuffled)-1, 0, -1):
         if random.random() > 0.35:
@@ -200,6 +259,12 @@ def perturb_student_order(ctx, base_order):
 
 
 def solve_multi_start(ctx, base_order):
+    """Run repeated greedy-repair attempts and keep the best result found.
+
+    Multi-start search starts from the current best schedule, then tries many
+    perturbed student orders with randomized tie-breaking. Whenever a trial yields
+    fewer unscheduled students, it replaces the previous best schedule.
+    """
     best_assignments = clone_assignments(ctx["assignments"])
     best_unscheduled = solve_greedy_pass(ctx, base_order, False)
     best_unscheduled = repair_schedule(ctx, best_unscheduled)  # 後續定義 repair
@@ -221,6 +286,12 @@ def solve_multi_start(ctx, base_order):
 
 
 def optimize_schedule(ctx):
+    """Locally improve soft preference quality after coverage is decided.
+
+    This stage performs random local moves. A new assignment is accepted only if
+    it improves or preserves the current soft cost, so hard-constraint validity is
+    preserved while preference quality is refined.
+    """
     current_cost = calculate_soft_cost(
         [{"student": ctx["students"][i]["student"], "roomSlot": a["roomSlot"]} 
          for i, a in enumerate(ctx["assignments"]) if a],
@@ -256,6 +327,7 @@ def optimize_schedule(ctx):
 
 
 def summarize_unscheduled(ctx, student_index):
+    """Generate a UI-friendly explanation for an unscheduled student."""
     domain = ctx["students"][student_index]
     if not domain["valid_room_slots"]:
         return {"reason": "NO_COMMON_TIME", "details": "指導教授與口試教授沒有任何共同可用時段。"}
@@ -263,6 +335,12 @@ def summarize_unscheduled(ctx, student_index):
 
 
 def try_repair_placement(ctx, student_index, depth_remaining, visiting_students, reserved_slot_ids):
+    """Recursively try to place one student by displacing blocking assignments.
+
+    This is the core repair routine. It temporarily removes blockers, tries to
+    re-place them elsewhere, and commits the move only if the whole repair chain
+    succeeds within the allowed depth.
+    """
     if has_timed_out(ctx["start_time"], ctx["timeout_ms"]) or depth_remaining < 0 or student_index in visiting_students:
         return False
 
@@ -316,6 +394,7 @@ def try_repair_placement(ctx, student_index, depth_remaining, visiting_students,
 
 
 def repair_schedule(ctx, unscheduled_indices):
+    """Repeatedly attempt local repairs for still-unscheduled students."""
     remaining = unscheduled_indices[:]
     made_progress = True
     while made_progress and remaining and not has_timed_out(ctx["start_time"], ctx["timeout_ms"]):
@@ -332,6 +411,7 @@ def repair_schedule(ctx, unscheduled_indices):
 
 
 def try_repair(ctx, student_index, depth_limit=None):
+    """Choose a depth limit and call the recursive repair routine."""
     if depth_limit is None:
         domain_size = len(ctx["students"][student_index]["valid_room_slots"])
         depth_limit = 4 if domain_size <= 4 else (3 if domain_size <= 12 else 2)
@@ -339,6 +419,16 @@ def try_repair(ctx, student_index, depth_limit=None):
 
 
 def main():
+    """Execute the full heuristic scheduling pipeline from top to bottom.
+
+    High-level flow:
+    1. Read normalized payload.
+    2. Build domains and the student conflict graph.
+    3. Try strict backtracking first.
+    4. If needed, fall back to greedy construction, repair, and multi-start.
+    5. Optionally refine soft preference quality.
+    6. Output assignments and unscheduled explanations.
+    """
     payload = read_payload()
     students = payload.get("students", [])
     all_room_slots = payload.get("allRoomSlots", [])
@@ -348,12 +438,14 @@ def main():
     timeout_raw = payload.get("timeoutMs", 1500)
     timeout_ms = max(500, int(timeout_raw if timeout_raw is not None else 1500))
 
-    # 建立 domain 與衝突圖
+    # Step 1: Build the feasible domain for every student.
     student_domains = [
         {"studentIndex": i, "student": s, "valid_room_slots": get_static_domain(s, all_room_slots, prof_availability)}
         for i, s in enumerate(students)
     ]
 
+    # Step 2: Build a conflict graph. Two students conflict if they share a
+    # supervisor or observer and therefore cannot be scheduled in the same slot.
     conflict_graph = [[] for _ in students]
     for i in range(len(students)):
         for j in range(i + 1, len(students)):
@@ -371,6 +463,8 @@ def main():
         key=lambda x: (len(student_domains[x]["valid_room_slots"]), -len(conflict_graph[x]))
     )
 
+    # The shared context object carries the current assignment state, heuristic
+    # metadata, and runtime budget across all heuristic stages.
     ctx = {
         "students": student_domains,
         "assignments": [None] * len(students),
@@ -385,20 +479,21 @@ def main():
         for slot in domain["valid_room_slots"]:
             ctx["slot_demand"][slot["slotId"]] += 1
 
-    # 先嘗試嚴格回溯
+    # Step 3: Try strict backtracking first. This gives the solver one chance to
+    # find a complete valid solution without heuristic compromise.
     solved = solve_strict(ctx, student_order, 0)
 
     if not solved:
-        # 啟發式後備
+        # Step 4: Fall back to a layered heuristic pipeline.
         unscheduled = solve_greedy_pass(ctx, student_order)
         unscheduled = repair_schedule(ctx, unscheduled)
         unscheduled = solve_multi_start(ctx, student_order)
 
-    # 優化軟約束
+    # Step 5: If preferences exist, refine the chosen schedule locally.
     if prof_preferences:
         optimize_schedule(ctx)
 
-    # 產生輸出
+    # Step 6: Convert the internal assignment state into the common output format.
     assignments = []
     for a in ctx["assignments"]:
         if a:
@@ -418,6 +513,8 @@ def main():
             "details": summary["details"],
         })
 
+    # The output format mirrors the other solvers so the frontend does not need
+    # solver-specific rendering logic.
     result = {
         "success": len(unscheduled_list) == 0,
         "assignments": assignments,
